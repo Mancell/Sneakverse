@@ -1,4 +1,6 @@
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+import { z } from 'zod';
 import { users } from './user';
 
 export const accounts = pgTable('accounts', {
@@ -16,3 +18,30 @@ export const accounts = pgTable('accounts', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAccountSchema = z.object({
+  userId: z.string().uuid(),
+  accountId: z.string().min(1),
+  providerId: z.string().min(1),
+  accessToken: z.string().optional().nullable(),
+  refreshToken: z.string().optional().nullable(),
+  accessTokenExpiresAt: z.date().optional().nullable(),
+  refreshTokenExpiresAt: z.date().optional().nullable(),
+  scope: z.string().optional().nullable(),
+  idToken: z.string().optional().nullable(),
+  password: z.string().optional().nullable(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+export const selectAccountSchema = insertAccountSchema.extend({
+  id: z.string().uuid(),
+});
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+export type SelectAccount = z.infer<typeof selectAccountSchema>;

@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { categories } from './categories';
 import { genders } from './filters/genders';
 import { brands } from './brands';
+import { productVariants } from './variants';
+import { productImages } from './images';
+import { reviews } from './reviews';
+import { wishlists } from './wishlists';
 
 export const products = pgTable('products', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -14,11 +18,12 @@ export const products = pgTable('products', {
   brandId: uuid('brand_id').references(() => brands.id, { onDelete: 'set null' }),
   isPublished: boolean('is_published').notNull().default(false),
   defaultVariantId: uuid('default_variant_id'),
+  amazonUrl: text('amazon_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const productsRelations = relations(products, ({ one }) => ({
+export const productsRelations = relations(products, ({ one, many }) => ({
   category: one(categories, {
     fields: [products.categoryId],
     references: [categories.id],
@@ -31,6 +36,14 @@ export const productsRelations = relations(products, ({ one }) => ({
     fields: [products.brandId],
     references: [brands.id],
   }),
+  defaultVariant: one(productVariants, {
+    fields: [products.defaultVariantId],
+    references: [productVariants.id],
+  }),
+  variants: many(productVariants),
+  images: many(productImages),
+  reviews: many(reviews),
+  wishlists: many(wishlists),
 }));
 
 export const insertProductSchema = z.object({
@@ -41,6 +54,7 @@ export const insertProductSchema = z.object({
   brandId: z.string().uuid().optional().nullable(),
   isPublished: z.boolean().optional(),
   defaultVariantId: z.string().uuid().optional().nullable(),
+  amazonUrl: z.string().url().optional().nullable(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });

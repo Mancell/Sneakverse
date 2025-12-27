@@ -9,6 +9,7 @@ const OPTIONS = [
   { label: "Newest", value: "newest" },
   { label: "Price (High → Low)", value: "price_desc" },
   { label: "Price (Low → High)", value: "price_asc" },
+  { label: "En Sevilenler", value: "most_popular" },
 ] as const;
 
 export default function Sort() {
@@ -16,7 +17,7 @@ export default function Sort() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = useMemo(() => `?${searchParams.toString()}`, [searchParams]);
-  const selected = searchParams.get("sort") ?? "featured";
+  const selected = searchParams.get("sort") ?? "newest";
 
   const onChange = (value: string) => {
     const withSort = setParam(pathname, search, "sort", value);

@@ -5,18 +5,30 @@ import { useEffect, useMemo, useState } from "react";
 import { getArrayParam, removeParams, toggleArrayParam } from "@/lib/utils/query";
 
 const GENDERS = ["men", "women", "unisex"] as const;
-const SIZES = ["XS", "S", "M", "L", "XL"] as const;
-const COLORS = ["black", "white", "red", "green", "blue", "grey"] as const;
+const COLORS = ["black", "white", "red", "blue", "green", "gray"] as const;
 const PRICES = [
   { id: "0-50", label: "$0 - $50" },
   { id: "50-100", label: "$50 - $100" },
   { id: "100-150", label: "$100 - $150" },
-  { id: "150-", label: "Over $150" },
+  { id: "150-200", label: "$150 - $200" },
+  { id: "200-", label: "Over $200" },
 ] as const;
 
-type GroupKey = "gender" | "size" | "color" | "price";
+type GroupKey = "gender" | "brand" | "category" | "color" | "price";
 
-export default function Filters() {
+type Brand = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export default function Filters({ brands, categories }: { brands: Brand[]; categories: Category[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -25,14 +37,16 @@ export default function Filters() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<GroupKey, boolean>>({
     gender: true,
-    size: true,
+    brand: true,
+    category: true,
     color: true,
     price: true,
   });
 
   const activeCounts = {
     gender: getArrayParam(search, "gender").length,
-    size: getArrayParam(search, "size").length,
+    brand: getArrayParam(search, "brand").length,
+    category: getArrayParam(search, "category").length,
     color: getArrayParam(search, "color").length,
     price: getArrayParam(search, "price").length,
   };
@@ -47,7 +61,7 @@ export default function Filters() {
   };
 
   const clearAll = () => {
-    const url = removeParams(pathname, search, ["gender", "size", "color", "price", "page"]);
+    const url = removeParams(pathname, search, ["gender", "brand", "category", "color", "price", "page"]);
     router.push(url, { scroll: false });
   };
 
@@ -121,20 +135,43 @@ export default function Filters() {
           </ul>
         </Group>
 
-        <Group title={`Size ${activeCounts.size ? `(${activeCounts.size})` : ""}`} k="size">
-          <ul className="grid grid-cols-5 gap-2">
-            {SIZES.map((s) => {
-              const checked = getArrayParam(search, "size").includes(s);
+        <Group title={`Brand ${activeCounts.brand ? `(${activeCounts.brand})` : ""}`} k="brand">
+          <ul className="space-y-2">
+            {brands.map((b) => {
+              const checked = getArrayParam(search, "brand").includes(b.slug);
               return (
-                <li key={s}>
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-dark-900"
-                      checked={checked}
-                      onChange={() => onToggle("size", s)}
-                    />
-                    <span className="text-body">{s}</span>
+                <li key={b.id} className="flex items-center gap-2">
+                  <input
+                    id={`brand-${b.slug}`}
+                    type="checkbox"
+                    className="h-4 w-4 accent-dark-900"
+                    checked={checked}
+                    onChange={() => onToggle("brand", b.slug)}
+                  />
+                  <label htmlFor={`brand-${b.slug}`} className="text-body text-dark-900">
+                    {b.name}
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </Group>
+
+        <Group title={`Category ${activeCounts.category ? `(${activeCounts.category})` : ""}`} k="category">
+          <ul className="space-y-2">
+            {categories.map((c) => {
+              const checked = getArrayParam(search, "category").includes(c.slug);
+              return (
+                <li key={c.id} className="flex items-center gap-2">
+                  <input
+                    id={`category-${c.slug}`}
+                    type="checkbox"
+                    className="h-4 w-4 accent-dark-900"
+                    checked={checked}
+                    onChange={() => onToggle("category", c.slug)}
+                  />
+                  <label htmlFor={`category-${c.slug}`} className="text-body text-dark-900">
+                    {c.name}
                   </label>
                 </li>
               );
@@ -195,11 +232,22 @@ export default function Filters() {
             onClick={() => setOpen(false)}
           />
           <div className="absolute inset-y-0 left-0 w-80 max-w-[80%] overflow-auto bg-light-100 p-4 shadow-xl">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-body-medium">Filters</h3>
-              <button className="text-caption text-dark-700 underline" onClick={clearAll}>
-                Clear all
-              </button>
+            <div className="mb-4 flex items-center justify-between border-b border-light-300 pb-3">
+              <h3 className="text-body-medium text-dark-900">Filters</h3>
+              <div className="flex items-center gap-3">
+                <button className="text-caption text-dark-700 underline" onClick={clearAll}>
+                  Clear all
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-md p-1 text-dark-700 hover:bg-light-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-dark-500"
+                  aria-label="Close filters"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             {/* Reuse the same desktop content by rendering the component again */}
             <div className="md:hidden">
@@ -225,20 +273,43 @@ export default function Filters() {
                 </ul>
               </Group>
 
-              <Group title="Size" k="size">
-                <ul className="grid grid-cols-4 gap-2">
-                  {SIZES.map((s) => {
-                    const checked = getArrayParam(search, "size").includes(s);
+              <Group title="Brand" k="brand">
+                <ul className="space-y-2">
+                  {brands.map((b) => {
+                    const checked = getArrayParam(search, "brand").includes(b.slug);
                     return (
-                      <li key={s}>
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-dark-900"
-                            checked={checked}
-                            onChange={() => onToggle("size", s)}
-                          />
-                          <span className="text-body">{s}</span>
+                      <li key={b.id} className="flex items-center gap-2">
+                        <input
+                          id={`m-brand-${b.slug}`}
+                          type="checkbox"
+                          className="h-4 w-4 accent-dark-900"
+                          checked={checked}
+                          onChange={() => onToggle("brand", b.slug)}
+                        />
+                        <label htmlFor={`m-brand-${b.slug}`} className="text-body">
+                          {b.name}
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Group>
+
+              <Group title="Category" k="category">
+                <ul className="space-y-2">
+                  {categories.map((c) => {
+                    const checked = getArrayParam(search, "category").includes(c.slug);
+                    return (
+                      <li key={c.id} className="flex items-center gap-2">
+                        <input
+                          id={`m-category-${c.slug}`}
+                          type="checkbox"
+                          className="h-4 w-4 accent-dark-900"
+                          checked={checked}
+                          onChange={() => onToggle("category", c.slug)}
+                        />
+                        <label htmlFor={`m-category-${c.slug}`} className="text-body">
+                          {c.name}
                         </label>
                       </li>
                     );

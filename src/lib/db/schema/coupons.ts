@@ -16,7 +16,7 @@ export const coupons = pgTable('coupons', {
 export const insertCouponSchema = z.object({
   code: z.string().min(1),
   discountType: z.enum(['percentage', 'fixed']),
-  discountValue: z.number(),
+  discountValue: z.string(),
   expiresAt: z.date().optional().nullable(),
   maxUsage: z.number().int().nonnegative().optional(),
   usedCount: z.number().int().nonnegative().optional(),

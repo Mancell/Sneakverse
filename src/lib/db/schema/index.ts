@@ -6,12 +6,16 @@ export * from './guest';
 
 export * from './addresses';
 export * from './brands';
+export * from './brand-categories';
 export * from './categories';
 export * from './collections';
 export * from './products';
 export * from './images';
 export * from './variants';
 export * from './reviews';
+export * from './featured-reviews';
+export * from './social-media';
+export * from './price-history';
 export * from './carts';
 export * from './orders';
 export * from './payments';

@@ -1,5 +1,3 @@
-
-
 "use server";
 
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
@@ -7,6 +5,7 @@ import { db } from "@/lib/db";
 import {
   brands,
   categories,
+  featuredReviews,
   genders,
   productImages,
   productVariants,
@@ -15,6 +14,7 @@ import {
   colors,
   users,
   reviews,
+  priceHistory,
   type SelectProduct,
   type SelectVariant,
   type SelectProductImage,
@@ -35,6 +35,8 @@ type ProductListItem = {
   maxPrice: number | null;
   createdAt: Date;
   subtitle?: string | null;
+  brandName?: string | null;
+  brandLogoUrl?: string | null;
 };
 
 export type GetAllProductsResult = {
@@ -43,170 +45,285 @@ export type GetAllProductsResult = {
 };
 
 export async function getAllProducts(filters: NormalizedProductFilters): Promise<GetAllProductsResult> {
-  const conds: SQL[] = [eq(products.isPublished, true)];
+  try {
+    console.log("[getAllProducts] Starting with filters:", JSON.stringify(filters));
+    const conds: SQL[] = [eq(products.isPublished, true)];
 
-  if (filters.search) {
-    const pattern = `%${filters.search}%`;
-    conds.push(or(ilike(products.name, pattern), ilike(products.description, pattern))!);
-  }
+    if (filters.search) {
+      // Normalize search query: remove spaces, convert to lowercase for better matching
+      const normalizedSearch = filters.search.trim().toLowerCase().replace(/\s+/g, '');
+      const searchPattern = `%${filters.search.trim()}%`;
+      
+      // Search in multiple fields with case-insensitive matching
+      // Also search in normalized form (without spaces) for better results
+      conds.push(
+        or(
+          ilike(products.name, searchPattern),
+          ilike(products.description, searchPattern),
+          // Search in brand name via join
+          ilike(brands.name, searchPattern),
+          // Normalized search (without spaces) - for "newbalance" to match "New Balance"
+          sql`LOWER(REPLACE(${products.name}, ' ', '')) LIKE ${`%${normalizedSearch}%`}`,
+          sql`LOWER(REPLACE(${brands.name}, ' ', '')) LIKE ${`%${normalizedSearch}%`}`
+        )!
+      );
+    }
 
-  if (filters.genderSlugs.length) {
-    conds.push(inArray(genders.slug, filters.genderSlugs));
-  }
-
-  if (filters.brandSlugs.length) {
-    conds.push(inArray(brands.slug, filters.brandSlugs));
-  }
-
-  if (filters.categorySlugs.length) {
-    conds.push(inArray(categories.slug, filters.categorySlugs));
-  }
-
-  const hasSize = filters.sizeSlugs.length > 0;
-  const hasColor = filters.colorSlugs.length > 0;
-  const hasPrice = !!(filters.priceMin !== undefined || filters.priceMax !== undefined || filters.priceRanges.length);
-
-  const variantConds: SQL[] = [];
-  if (hasSize) {
-    variantConds.push(inArray(productVariants.sizeId, db
-      .select({ id: sizes.id })
-      .from(sizes)
-      .where(inArray(sizes.slug, filters.sizeSlugs))));
-  }
-  if (hasColor) {
-    variantConds.push(inArray(productVariants.colorId, db
-      .select({ id: colors.id })
-      .from(colors)
-      .where(inArray(colors.slug, filters.colorSlugs))));
-  }
-  if (hasPrice) {
-    const priceBounds: SQL[] = [];
-    if (filters.priceRanges.length) {
-      for (const [min, max] of filters.priceRanges) {
-        const subConds: SQL[] = [];
-        if (min !== undefined) {
-          subConds.push(sql`(${productVariants.price})::numeric >= ${min}`);
-        }
-        if (max !== undefined) {
-          subConds.push(sql`(${productVariants.price})::numeric <= ${max}`);
-        }
-        if (subConds.length) priceBounds.push(and(...subConds)!);
+    // Pre-fetch IDs for filters to use in queries (more reliable than subqueries)
+    let genderIds: string[] = [];
+    let brandIds: string[] = [];
+    let categoryIds: string[] = [];
+    
+    if (filters.genderSlugs.length) {
+      const genderResults = await db
+        .select({ id: genders.id })
+        .from(genders)
+        .where(inArray(genders.slug, filters.genderSlugs));
+      genderIds = genderResults.map(g => g.id);
+      console.log("[getAllProducts] Gender slugs:", filters.genderSlugs, "-> IDs:", genderIds);
+      if (genderIds.length > 0) {
+        conds.push(inArray(products.genderId, genderIds));
       }
     }
-    if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
-      const subConds: SQL[] = [];
-      if (filters.priceMin !== undefined) subConds.push(sql`(${productVariants.price})::numeric >= ${filters.priceMin}`);
-      if (filters.priceMax !== undefined) subConds.push(sql`(${productVariants.price})::numeric <= ${filters.priceMax}`);
-      if (subConds.length) priceBounds.push(and(...subConds)!);
-    }
-    if (priceBounds.length) {
-      variantConds.push(or(...priceBounds)!);
-    }
-  }
 
-  const variantJoin = db
-    .select({
-      variantId: productVariants.id,
-      productId: productVariants.productId,
-      price: sql<number>`${productVariants.price}::numeric`.as("price"),
-      colorId: productVariants.colorId,
-      sizeId: productVariants.sizeId,
-    })
-    .from(productVariants)
-    .where(variantConds.length ? and(...variantConds) : undefined)
-    .as("v");
-  const imagesJoin = hasColor
-    ? db
-        .select({
-          productId: productImages.productId,
-          url: productImages.url,
-          rn: sql<number>`row_number() over (partition by ${productImages.productId} order by ${productImages.isPrimary} desc, ${productImages.sortOrder} asc)`.as("rn"),
-        })
-        .from(productImages)
-        .innerJoin(productVariants, eq(productVariants.id, productImages.variantId))
-        .where(
-          inArray(
-            productVariants.colorId,
-            db.select({ id: colors.id }).from(colors).where(inArray(colors.slug, filters.colorSlugs))
+    if (filters.brandSlugs.length) {
+      const brandResults = await db
+        .select({ id: brands.id })
+        .from(brands)
+        .where(inArray(brands.slug, filters.brandSlugs));
+      brandIds = brandResults.map(b => b.id);
+      if (brandIds.length > 0) {
+        conds.push(inArray(products.brandId, brandIds));
+      }
+    }
+
+    if (filters.categorySlugs.length) {
+      const categoryResults = await db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(inArray(categories.slug, filters.categorySlugs));
+      categoryIds = categoryResults.map(c => c.id);
+      if (categoryIds.length > 0) {
+        conds.push(inArray(products.categoryId, categoryIds));
+      }
+    }
+
+    const hasSize = filters.sizeSlugs.length > 0;
+    const hasColor = filters.colorSlugs.length > 0;
+    const hasPrice = !!(filters.priceMin !== undefined || filters.priceMax !== undefined || filters.priceRanges.length);
+
+    // Pre-fetch IDs for variant filters to use in subqueries
+    let sizeIds: string[] = [];
+    let colorIds: string[] = [];
+    
+    if (hasSize) {
+      const sizeResults = await db
+        .select({ id: sizes.id })
+        .from(sizes)
+        .where(inArray(sizes.slug, filters.sizeSlugs));
+      sizeIds = sizeResults.map(s => s.id);
+    }
+    
+    if (hasColor) {
+      const colorResults = await db
+        .select({ id: colors.id })
+        .from(colors)
+        .where(inArray(colors.slug, filters.colorSlugs));
+      colorIds = colorResults.map(c => c.id);
+    }
+
+    // Build variant filter SQL string for subqueries
+    // Note: We use sql.raw() here because we need to embed SQL fragments in subqueries
+    // The IDs are pre-fetched and validated, so this is safe
+    const variantFilterParts: string[] = [];
+    if (sizeIds.length > 0) {
+      const sizeIdsStr = sizeIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+      variantFilterParts.push(`pv.size_id IN (${sizeIdsStr})`);
+    }
+    if (colorIds.length > 0) {
+      const colorIdsStr = colorIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+      variantFilterParts.push(`pv.color_id IN (${colorIdsStr})`);
+    }
+    if (hasPrice) {
+      const priceBounds: string[] = [];
+      if (filters.priceRanges.length) {
+        for (const [min, max] of filters.priceRanges) {
+          const subConds: string[] = [];
+          if (min !== undefined) {
+            subConds.push(`pv.price::numeric >= ${min}`);
+          }
+          if (max !== undefined) {
+            subConds.push(`pv.price::numeric <= ${max}`);
+          }
+          if (subConds.length) priceBounds.push(`(${subConds.join(' AND ')})`);
+        }
+      }
+      if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+        const subConds: string[] = [];
+        if (filters.priceMin !== undefined) subConds.push(`pv.price::numeric >= ${filters.priceMin}`);
+        if (filters.priceMax !== undefined) subConds.push(`pv.price::numeric <= ${filters.priceMax}`);
+        if (subConds.length) priceBounds.push(`(${subConds.join(' AND ')})`);
+      }
+      if (priceBounds.length) {
+        variantFilterParts.push(`(${priceBounds.join(' OR ')})`);
+      }
+    }
+
+    const baseWhere = conds.length ? and(...conds) : undefined;
+
+    // Use subqueries directly in SQL for aggregation
+    // Build variant filter SQL string
+    const variantFilterSQL = variantFilterParts.length > 0
+      ? ` AND ${variantFilterParts.join(' AND ')}`
+      : '';
+
+    // Simplified price aggregation - use direct subquery without variant filters first
+    const priceAgg = variantFilterSQL
+      ? {
+          minPrice: sql<number | null>`(
+            SELECT MIN(pv.price::numeric)
+            FROM product_variants pv
+            WHERE pv.product_id = ${products.id}
+            ${sql.raw(variantFilterSQL)}
+          )`,
+          maxPrice: sql<number | null>`(
+            SELECT MAX(pv.price::numeric)
+            FROM product_variants pv
+            WHERE pv.product_id = ${products.id}
+            ${sql.raw(variantFilterSQL)}
+          )`,
+        }
+      : {
+          minPrice: sql<number | null>`(
+            SELECT MIN(price::numeric)
+            FROM product_variants
+            WHERE product_id = ${products.id}
+          )`,
+          maxPrice: sql<number | null>`(
+            SELECT MAX(price::numeric)
+            FROM product_variants
+            WHERE product_id = ${products.id}
+          )`,
+        };
+
+    // Build image subquery
+    const imageAgg = hasColor && filters.colorSlugs.length > 0
+      ? sql<string | null>`(
+          SELECT pi.url
+          FROM product_images pi
+          INNER JOIN product_variants pv ON pv.id = pi.variant_id
+          WHERE pi.product_id = ${products.id}
+          AND pv.color_id IN (
+            SELECT id FROM colors WHERE slug = ANY(${sql.raw(`ARRAY[${filters.colorSlugs.map(s => `'${s.replace(/'/g, "''")}'`).join(',')}]`)})
           )
-        )
-        .as("pi")
-    : db
-        .select({
-          productId: productImages.productId,
-          url: productImages.url,
-          rn: sql<number>`row_number() over (partition by ${productImages.productId} order by ${productImages.isPrimary} desc, ${productImages.sortOrder} asc)`.as("rn"),
-        })
-        .from(productImages)
-        .where(isNull(productImages.variantId))
-        .as("pi")
+          ORDER BY pi.is_primary DESC, pi.sort_order ASC
+          LIMIT 1
+        )`
+      : sql<string | null>`(
+          SELECT url
+          FROM product_images
+          WHERE product_id = ${products.id}
+          AND variant_id IS NULL
+          ORDER BY is_primary DESC, sort_order ASC
+          LIMIT 1
+        )`;
 
+    // Handle sorting: featured (default), newest, price_asc, price_desc, most_popular
+    // For most_popular, we'll use review count (if reviews table exists) or fallback to createdAt
+    let primaryOrder;
+    if (filters.sort === "price_asc") {
+      primaryOrder = asc(priceAgg.minPrice);
+    } else if (filters.sort === "price_desc") {
+      primaryOrder = desc(priceAgg.maxPrice);
+    } else if (filters.sort === "most_popular") {
+      // Sort by review count (most reviewed = most popular)
+      // We'll use a subquery to count reviews per product
+      const reviewCountAgg = sql<number>`(
+        SELECT COUNT(*)::int
+        FROM ${reviews}
+        WHERE ${reviews.productId} = ${products.id}
+      )`;
+      primaryOrder = desc(reviewCountAgg);
+    } else {
+      // newest or featured (default)
+      primaryOrder = desc(products.createdAt);
+    }
 
-  const baseWhere = conds.length ? and(...conds) : undefined;
+    const page = Math.max(1, filters.page);
+    const limit = Math.max(1, Math.min(filters.limit, 60));
+    const offset = (page - 1) * limit;
 
-  const priceAgg = {
-    minPrice: sql<number | null>`min(${variantJoin.price})`,
-    maxPrice: sql<number | null>`max(${variantJoin.price})`,
-  };
+    // First, try a simple query without subqueries to see if products exist
+    const testRows = await db
+      .select({ id: products.id, name: products.name })
+      .from(products)
+      .where(eq(products.isPublished, true))
+      .limit(5);
+    
+    console.log("[getAllProducts] Test query found", testRows.length, "published products");
+    
+    const rows = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        createdAt: products.createdAt,
+        subtitle: genders.label,
+        brandName: brands.name,
+        brandLogoUrl: brands.logoUrl,
+        minPrice: priceAgg.minPrice,
+        maxPrice: priceAgg.maxPrice,
+        imageUrl: imageAgg,
+      })
+      .from(products)
+      .leftJoin(genders, eq(genders.id, products.genderId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .leftJoin(categories, eq(categories.id, products.categoryId))
+      .where(baseWhere)
+      .groupBy(products.id, products.name, products.createdAt, genders.id, genders.label, brands.id, brands.name, brands.logoUrl)
+      .orderBy(primaryOrder, desc(products.createdAt), asc(products.id))
+      .limit(limit)
+      .offset(offset);
+    
+    console.log("[getAllProducts] Query executed, rows:", rows.length);
+    // Optimize count query: Only join variant if we have variant filters
+    const countBaseQuery = db
+      .select({
+        cnt: count(sql<number>`distinct ${products.id}`),
+      })
+      .from(products)
+      .leftJoin(genders, eq(genders.id, products.genderId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .leftJoin(categories, eq(categories.id, products.categoryId));
 
-  const imageAgg = sql<string | null>`max(case when ${imagesJoin.rn} = 1 then ${imagesJoin.url} else null end)`;
+    // Count query
+    const countRows = await countBaseQuery.where(baseWhere);
 
-  const primaryOrder =
-    filters.sort === "price_asc"
-      ? asc(sql`min(${variantJoin.price})`)
-      : filters.sort === "price_desc"
-      ? desc(sql`max(${variantJoin.price})`)
-      : desc(products.createdAt);
+    const productsOut: ProductListItem[] = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      imageUrl: r.imageUrl,
+      minPrice: r.minPrice === null ? null : Number(r.minPrice),
+      maxPrice: r.maxPrice === null ? null : Number(r.maxPrice),
+      createdAt: r.createdAt,
+      subtitle: r.subtitle ? `${r.subtitle} Shoes` : null,
+      brandName: r.brandName ?? null,
+      brandLogoUrl: r.brandLogoUrl ?? null,
+    }));
 
-  const page = Math.max(1, filters.page);
-  const limit = Math.max(1, Math.min(filters.limit, 60));
-  const offset = (page - 1) * limit;
+    const totalCount = countRows[0]?.cnt ?? 0;
 
-  const rows = await db
-    .select({
-      id: products.id,
-      name: products.name,
-      createdAt: products.createdAt,
-      subtitle: genders.label,
-      minPrice: priceAgg.minPrice,
-      maxPrice: priceAgg.maxPrice,
-      imageUrl: imageAgg,
-    })
-    .from(products)
-    .leftJoin(variantJoin, eq(variantJoin.productId, products.id))
-    .leftJoin(imagesJoin, eq(imagesJoin.productId, products.id))
-    .leftJoin(genders, eq(genders.id, products.genderId))
-    .leftJoin(brands, eq(brands.id, products.brandId))
-    .leftJoin(categories, eq(categories.id, products.categoryId))
-    .where(baseWhere)
-    .groupBy(products.id, products.name, products.createdAt, genders.label)
-    .orderBy(primaryOrder, desc(products.createdAt), asc(products.id))
-    .limit(limit)
-    .offset(offset);
-  const countRows = await db
-    .select({
-      cnt: count(sql<number>`distinct ${products.id}`),
-    })
-    .from(products)
-    .leftJoin(variantJoin, eq(variantJoin.productId, products.id))
-    .leftJoin(genders, eq(genders.id, products.genderId))
-    .leftJoin(brands, eq(brands.id, products.brandId))
-    .leftJoin(categories, eq(categories.id, products.categoryId))
-    .where(baseWhere);
+    console.log("[getAllProducts] Total count:", totalCount, "Products:", productsOut.length);
 
-  const productsOut: ProductListItem[] = rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    imageUrl: r.imageUrl,
-    minPrice: r.minPrice === null ? null : Number(r.minPrice),
-    maxPrice: r.maxPrice === null ? null : Number(r.maxPrice),
-    createdAt: r.createdAt,
-    subtitle: r.subtitle ? `${r.subtitle} Shoes` : null,
-  }));
-
-  const totalCount = countRows[0]?.cnt ?? 0;
-
-  return { products: productsOut, totalCount };
+    return { products: productsOut, totalCount };
+  } catch (error) {
+    console.error("[getAllProducts] Error:", error);
+    if (error instanceof Error) {
+      console.error("[getAllProducts] Error message:", error.message);
+      console.error("[getAllProducts] Error stack:", error.stack);
+    }
+    // Return empty result instead of throwing to prevent page crash
+    return { products: [], totalCount: 0 };
+  }
 }
 
 export type FullProduct = {
@@ -225,7 +342,16 @@ export type FullProduct = {
 };
 
 export async function getProduct(productId: string): Promise<FullProduct | null> {
-  const rows = await db
+  try {
+    // Validate productId is a valid UUID
+    if (!productId || typeof productId !== 'string') {
+      console.error("[getProduct] Invalid productId:", productId);
+      return null;
+    }
+
+    console.log("[getProduct] Fetching product with ID:", productId);
+
+    const rows = await db
     .select({
       productId: products.id,
       productName: products.name,
@@ -235,6 +361,7 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
       productGenderId: products.genderId,
       isPublished: products.isPublished,
       defaultVariantId: products.defaultVariantId,
+      productAmazonUrl: products.amazonUrl,
       productCreatedAt: products.createdAt,
       productUpdatedAt: products.updatedAt,
 
@@ -258,6 +385,9 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
       variantColorId: productVariants.colorId,
       variantSizeId: productVariants.sizeId,
       variantInStock: productVariants.inStock,
+      variantWeight: productVariants.weight,
+      variantDimensions: productVariants.dimensions,
+      variantCreatedAt: productVariants.createdAt,
 
       colorId: colors.id,
       colorName: colors.name,
@@ -293,6 +423,7 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
     brand?: SelectBrand | null;
     category?: SelectCategory | null;
     gender?: SelectGender | null;
+    amazonUrl?: string | null;
   } = {
     id: head.productId,
     name: head.productName,
@@ -302,6 +433,7 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
     genderId: head.productGenderId ?? null,
     isPublished: head.isPublished,
     defaultVariantId: head.defaultVariantId ?? null,
+    amazonUrl: head.productAmazonUrl ?? null,
     createdAt: head.productCreatedAt,
     updatedAt: head.productUpdatedAt,
     brand: head.brandId
@@ -343,9 +475,9 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
         colorId: r.variantColorId!,
         sizeId: r.variantSizeId!,
         inStock: r.variantInStock!,
-        weight: null,
-        dimensions: null,
-        createdAt: head.productCreatedAt,
+        weight: r.variantWeight ?? null,
+        dimensions: r.variantDimensions as { length?: number; width?: number; height?: number } | null,
+        createdAt: r.variantCreatedAt ?? head.productCreatedAt,
         color: r.colorId
           ? {
               id: r.colorId,
@@ -381,6 +513,19 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
     variants: Array.from(variantsMap.values()),
     images: Array.from(imagesMap.values()),
   };
+  } catch (error) {
+    console.error("[getProduct] Error:", error);
+    if (error instanceof Error) {
+      console.error("[getProduct] Error message:", error.message);
+      console.error("[getProduct] Error stack:", error.stack);
+      // Check if it's a database connection error
+      if (error.message.includes('Failed query')) {
+        console.error("[getProduct] Database query failed. Check database connection and query syntax.");
+      }
+    }
+    // Return null instead of throwing to prevent page crash
+    return null;
+  }
 }
 export type Review = {
   id: string;
@@ -397,6 +542,30 @@ export type RecommendedProduct = {
   price: number | null;
   imageUrl: string;
 };
+
+export async function getProductRating(productId: string): Promise<{ average: number; count: number } | null> {
+  try {
+    const result = await db
+      .select({
+        average: sql<number>`COALESCE(AVG(${reviews.rating})::numeric, 0)`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(reviews)
+      .where(eq(reviews.productId, productId));
+
+    if (result.length === 0 || result[0].count === 0) {
+      return null;
+    }
+
+    return {
+      average: Number(result[0].average),
+      count: Number(result[0].count),
+    };
+  } catch (error) {
+    console.error("[getProductRating] Error:", error);
+    return null;
+  }
+}
 
 export async function getProductReviews(productId: string): Promise<Review[]> {
   const rows = await db
@@ -422,6 +591,254 @@ export async function getProductReviews(productId: string): Promise<Review[]> {
     content: r.comment || "",
     createdAt: r.createdAt.toISOString(),
   }));
+}
+
+export type FeaturedReview = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  rating: number;
+  comment: string;
+  order: number;
+};
+
+export async function getFeaturedReviews(productId: string): Promise<FeaturedReview[]> {
+  try {
+    const rows = await db
+      .select({
+        id: featuredReviews.id,
+        firstName: featuredReviews.firstName,
+        lastName: featuredReviews.lastName,
+        rating: featuredReviews.rating,
+        comment: featuredReviews.comment,
+        order: featuredReviews.order,
+      })
+      .from(featuredReviews)
+      .where(eq(featuredReviews.productId, productId))
+      .orderBy(asc(featuredReviews.order))
+      .limit(3);
+
+    return rows.map((r) => ({
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      rating: r.rating,
+      comment: r.comment,
+      order: r.order,
+    }));
+  } catch (error) {
+    console.error("[getFeaturedReviews] Error:", error);
+    return [];
+  }
+}
+
+export type PriceHistoryPoint = {
+  date: string;
+  price: number;
+  salePrice?: number | null;
+};
+
+export async function getProductPriceHistory(productId: string, months: number = 12): Promise<PriceHistoryPoint[]> {
+  try {
+    console.log("[getProductPriceHistory] Fetching for productId:", productId);
+    console.log("[getProductPriceHistory] Months:", months);
+    
+    // Tarih filtresini kaldırıp tüm kayıtları çekelim (test için)
+    // const cutoffDate = new Date();
+    // cutoffDate.setMonth(cutoffDate.getMonth() - months);
+    // console.log("[getProductPriceHistory] Cutoff date:", cutoffDate);
+
+    const rows = await db
+      .select({
+        price: priceHistory.price,
+        salePrice: priceHistory.salePrice,
+        recordedAt: priceHistory.recordedAt,
+      })
+      .from(priceHistory)
+      .where(
+        eq(priceHistory.productId, productId)
+        // Tarih filtresini geçici olarak kaldırdık
+        // and(
+        //   eq(priceHistory.productId, productId),
+        //   gte(priceHistory.recordedAt, cutoffDate)
+        // )
+      )
+      .orderBy(asc(priceHistory.recordedAt));
+
+    console.log("[getProductPriceHistory] Found rows:", rows.length);
+    if (rows.length > 0) {
+      console.log("[getProductPriceHistory] First row:", {
+        price: rows[0].price,
+        salePrice: rows[0].salePrice,
+        recordedAt: rows[0].recordedAt,
+      });
+      console.log("[getProductPriceHistory] Last row:", {
+        price: rows[rows.length - 1].price,
+        salePrice: rows[rows.length - 1].salePrice,
+        recordedAt: rows[rows.length - 1].recordedAt,
+      });
+    }
+
+    const result = rows.map((r) => ({
+      date: r.recordedAt.toISOString().split('T')[0],
+      price: Number(r.price),
+      salePrice: r.salePrice ? Number(r.salePrice) : null,
+    }));
+
+    console.log("[getProductPriceHistory] Mapped result count:", result.length);
+    if (result.length > 0) {
+      console.log("[getProductPriceHistory] First mapped:", result[0]);
+      console.log("[getProductPriceHistory] Last mapped:", result[result.length - 1]);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("[getProductPriceHistory] Error:", error);
+    return [];
+  }
+}
+
+export type TikTokVideoCard = {
+  id: string;
+  videoUrl: string;
+  thumbnailUrl?: string | null;
+  title?: string | null;
+  author?: string | null;
+  duration?: number | null;
+};
+
+export async function getTikTokVideos(productId: string): Promise<TikTokVideoCard[]> {
+  try {
+    const { tiktokVideos } = await import('@/lib/db/schema/social-media');
+    const rows = await db
+      .select({
+        id: tiktokVideos.id,
+        videoUrl: tiktokVideos.videoUrl,
+        thumbnailUrl: tiktokVideos.thumbnailUrl,
+        title: tiktokVideos.title,
+        author: tiktokVideos.author,
+      })
+      .from(tiktokVideos)
+      .where(eq(tiktokVideos.productId, productId))
+      .orderBy(asc(tiktokVideos.sortOrder))
+      .limit(5);
+
+    return rows.map((r) => ({
+      id: r.id,
+      videoUrl: r.videoUrl,
+      thumbnailUrl: r.thumbnailUrl ?? undefined,
+      title: r.title ?? undefined,
+      author: r.author ?? undefined,
+      duration: undefined, // Duration veritabanında yok, video'dan alınabilir
+    }));
+  } catch (error) {
+    console.error("[getTikTokVideos] Error:", error);
+    return [];
+  }
+}
+
+export async function getAllBrands(): Promise<Array<{ id: string; name: string; slug: string }>> {
+  try {
+    const brandRows = await db
+      .select({
+        id: brands.id,
+        name: brands.name,
+        slug: brands.slug,
+        logoUrl: brands.logoUrl,
+      })
+      .from(brands)
+      .orderBy(brands.name);
+    
+    return brandRows;
+  } catch (error) {
+    console.error("[getAllBrands] Error:", error);
+    return [];
+  }
+}
+
+export async function getAllCategories(genderSlugs?: string[]): Promise<Array<{ id: string; name: string; slug: string }>> {
+  try {
+    // Priority categories that should appear at the top
+    const priorityCategories = ['sneakers', 'boots', 'sports-and-outdoor-shoes'];
+    
+    // If gender is specified, only return categories that have products for that gender
+    if (genderSlugs && genderSlugs.length > 0) {
+      // Get gender IDs
+      const genderResults = await db
+        .select({ id: genders.id })
+        .from(genders)
+        .where(inArray(genders.slug, genderSlugs));
+      const genderIds = genderResults.map(g => g.id);
+      
+      if (genderIds.length > 0) {
+        // Get distinct categories that have products for the selected gender(s)
+        const categoryRows = await db
+          .selectDistinct({
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
+          })
+          .from(categories)
+          .innerJoin(products, eq(products.categoryId, categories.id))
+          .where(and(
+            eq(products.isPublished, true),
+            inArray(products.genderId, genderIds)
+          ));
+        
+        // Sort: priority categories first, then alphabetically
+        const sorted = categoryRows.sort((a, b) => {
+          const aPriority = priorityCategories.indexOf(a.slug);
+          const bPriority = priorityCategories.indexOf(b.slug);
+          
+          // Both are priority categories - maintain priority order
+          if (aPriority !== -1 && bPriority !== -1) {
+            return aPriority - bPriority;
+          }
+          // Only a is priority
+          if (aPriority !== -1) return -1;
+          // Only b is priority
+          if (bPriority !== -1) return 1;
+          // Neither is priority - sort alphabetically
+          return a.name.localeCompare(b.name);
+        });
+        
+        console.log("[getAllCategories] Found categories for gender(s):", genderSlugs, "->", sorted.length, sorted.map(c => c.name));
+        return sorted;
+      }
+    }
+    
+    // If no gender specified, return all categories
+    const categoryRows = await db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories);
+    
+    // Sort: priority categories first, then alphabetically
+    const sorted = categoryRows.sort((a, b) => {
+      const aPriority = priorityCategories.indexOf(a.slug);
+      const bPriority = priorityCategories.indexOf(b.slug);
+      
+      // Both are priority categories - maintain priority order
+      if (aPriority !== -1 && bPriority !== -1) {
+        return aPriority - bPriority;
+      }
+      // Only a is priority
+      if (aPriority !== -1) return -1;
+      // Only b is priority
+      if (bPriority !== -1) return 1;
+      // Neither is priority - sort alphabetically
+      return a.name.localeCompare(b.name);
+    });
+    
+    console.log("[getAllCategories] Found all categories:", sorted.length, sorted.map(c => c.name));
+    return sorted;
+  } catch (error) {
+    console.error("[getAllCategories] Error:", error);
+    return [];
+  }
 }
 
 export async function getRecommendedProducts(productId: string): Promise<RecommendedProduct[]> {
@@ -487,14 +904,20 @@ export async function getRecommendedProducts(productId: string): Promise<Recomme
   const out: RecommendedProduct[] = [];
   for (const r of rows) {
     const img = r.imageUrl?.trim();
-    if (!img) continue;
+    // Skip products with invalid/missing images
+    if (!img || img.length === 0) continue;
+    
     out.push({
       id: r.id,
       title: r.title,
       price: r.minPrice === null ? null : Number(r.minPrice),
       imageUrl: img,
     });
+    
+    // Limit to 4-6 products
     if (out.length >= 6) break;
   }
-  return out;
+  
+  // Return at least 4 if available, otherwise return all
+  return out.length >= 4 ? out.slice(0, 6) : out;
 }

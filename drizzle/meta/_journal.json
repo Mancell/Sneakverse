@@ -8,6 +8,20 @@
       "when": 1755672111623,
       "tag": "0000_nosy_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766770752955,
+      "tag": "0001_short_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766771966474,
+      "tag": "0002_pink_mojo",
+      "breakpoints": true
     }
   ]
 }

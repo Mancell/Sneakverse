@@ -11,20 +11,47 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/lib/db/seed.ts"
+    "db:seed": "tsx src/lib/db/seed.ts",
+    "db:update-amazon": "tsx src/lib/db/update-amazon-urls.ts",
+    "db:update-categories": "tsx src/lib/db/update-product-categories.ts",
+    "db:update-brands": "tsx src/lib/db/update-product-brands.ts",
+    "db:seed-brand-categories": "tsx src/lib/db/seed-brand-categories.ts",
+    "db:update-by-brand-category": "tsx src/lib/db/update-products-by-brand-category.ts",
+    "db:update-product-names": "tsx src/lib/db/update-product-names.ts",
+    "db:add-featured-review": "tsx src/lib/db/add-featured-review.ts",
+    "db:add-test-tiktok": "tsx src/lib/db/add-test-tiktok-video.ts",
+    "db:add-nb2002r-tiktok": "tsx src/lib/db/add-nb2002r-tiktok-videos.ts",
+    "db:add-test-reviews": "tsx src/lib/db/add-test-reviews.ts",
+    "db:create-price-history-table": "tsx src/lib/db/create-price-history-table.ts",
+    "db:add-price-history": "tsx src/lib/db/add-price-history.ts",
+    "db:manual-price-history": "tsx src/lib/db/manual-add-price-history.ts",
+    "db:check-price-history": "tsx src/lib/db/check-price-history.ts",
+    "db:check-tiktok": "tsx src/lib/db/check-tiktok-videos.ts",
+    "db:clean-old-tiktok": "tsx src/lib/db/clean-old-tiktok-videos.ts",
+    "db:remove-tiktok-embeds": "tsx src/lib/db/remove-tiktok-embed-urls.ts",
+    "db:update-brand-logos": "tsx src/lib/db/update-brand-logos.ts"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.1",
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-brands-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
+    "@radix-ui/react-slot": "^1.2.4",
     "better-auth": "^1.3.7",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "dotenv": "^17.2.1",
     "drizzle-orm": "^0.44.4",
-    "next": "15.4.6",
+    "framer-motion": "^12.23.26",
+    "lucide-react": "^0.475.0",
+    "next": "^15.4.6",
+    "postgres": "^3.4.7",
+    "query-string": "^9.1.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "recharts": "^3.6.0",
+    "tailwind-merge": "^3.4.0",
     "uuid": "^11.1.0",
-    "zustand": "^5.0.7",
-    "query-string": "^9.1.1",
-    "lucide-react": "^0.475.0"
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -36,7 +63,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "typescript": "^5"
   }
 }

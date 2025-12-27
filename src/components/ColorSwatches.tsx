@@ -12,8 +12,12 @@ export interface ColorSwatchesProps {
   className?: string;
 }
 
-function firstValidImage(images: string[]) {
-  return images.find((s) => typeof s === "string" && s.trim().length > 0);
+function firstValidImage(images: string[]): string | undefined {
+  return images.find((s) => {
+    if (typeof s !== "string") return false;
+    const trimmed = s.trim();
+    return trimmed.length > 0 && (trimmed.startsWith("/") || trimmed.startsWith("http"));
+  });
 }
 
 export default function ColorSwatches({ productId, variants, className = "" }: ColorSwatchesProps) {

@@ -17,7 +17,7 @@ export const brandsRelations = relations(brands, ({ many }) => ({
 export const insertBrandSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),
-  logoUrl: z.string().url().optional().nullable(),
+  logoUrl: z.string().optional().nullable(), // Relative path veya URL olabilir
 });
 export const selectBrandSchema = insertBrandSchema.extend({
   id: z.string().uuid(),

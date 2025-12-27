@@ -88,7 +88,7 @@ export type NormalizedProductFilters = {
   priceMin?: number;
   priceMax?: number;
   priceRanges: Array<[number | undefined, number | undefined]>;
-  sort: "featured" | "newest" | "price_asc" | "price_desc";
+  sort: "featured" | "newest" | "price_asc" | "price_desc" | "most_popular";
   page: number;
   limit: number;
 };
@@ -133,7 +133,7 @@ export function parseFilterParams(sp: Record<string, string | string[] | undefin
 
   const sortParam = getStr("sort");
   const sort: NormalizedProductFilters["sort"] =
-    sortParam === "price_asc" || sortParam === "price_desc" || sortParam === "newest" || sortParam === "featured"
+    sortParam === "price_asc" || sortParam === "price_desc" || sortParam === "newest" || sortParam === "featured" || sortParam === "most_popular"
       ? sortParam
       : "newest";
 

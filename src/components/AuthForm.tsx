@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AnimatedText } from "@/components/ui/animated-underline-text-one";
 import SocialProviders from "./SocialProviders";
-import {useRouter} from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Props = {
   mode: "sign-in" | "sign-up";
@@ -13,6 +14,7 @@ type Props = {
 export default function AuthForm({ mode, onSubmit }: Props) {
   const [show, setShow] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,7 +24,10 @@ export default function AuthForm({ mode, onSubmit }: Props) {
     try {
       const result = await onSubmit(formData);
 
-      if(result?.ok) router.push("/");
+      if(result?.ok) {
+        const redirect = searchParams.get("redirect");
+        router.push(redirect || "/");
+      }
     } catch (e) {
       console.log("error", e);
     }
@@ -37,9 +42,13 @@ export default function AuthForm({ mode, onSubmit }: Props) {
             {mode === "sign-in" ? "Sign Up" : "Sign In"}
           </Link>
         </p>
-        <h1 className="mt-3 text-heading-3 text-dark-900">
-          {mode === "sign-in" ? "Welcome Back!" : "Join Nike Today!"}
-        </h1>
+        <div className="mt-3">
+          <AnimatedText 
+            text={mode === "sign-in" ? "Welcome Back!" : "Join Nike Today!"}
+            textClassName="text-heading-3 text-dark-900 text-left"
+            className="items-start"
+          />
+        </div>
         <p className="mt-1 text-body text-dark-700">
           {mode === "sign-in"
             ? "Sign in to continue your journey"
