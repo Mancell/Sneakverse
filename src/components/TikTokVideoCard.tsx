@@ -404,52 +404,6 @@ export function TikTokVideoCard({ video, isPlaying: externalIsPlaying, onPlayCha
           </div>
         )}
       </div>
-      
-      
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 0;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.005);
-          }
-        }
-        
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(5px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes wave1 {
-          0%, 100% { height: 4px; }
-          50% { height: 16px; }
-        }
-        @keyframes wave2 {
-          0%, 100% { height: 5px; }
-          50% { height: 12px; }
-        }
-        @keyframes wave3 {
-          0%, 100% { height: 7px; }
-          50% { height: 18px; }
-        }
-        @keyframes wave4 {
-          0%, 100% { height: 5px; }
-          50% { height: 14px; }
-        }
-        @keyframes wave5 {
-          0%, 100% { height: 3px; }
-          50% { height: 13px; }
-        }
-      `}</style>
     </div>
   );
 }

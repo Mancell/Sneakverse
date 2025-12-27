@@ -439,24 +439,24 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
     brand: head.brandId
       ? {
           id: head.brandId,
-          name: head.brandName!,
-          slug: head.brandSlug!,
+          name: head.brandName ?? "Unknown Brand",
+          slug: head.brandSlug ?? "",
           logoUrl: head.brandLogoUrl ?? null,
         }
       : null,
     category: head.categoryId
       ? {
           id: head.categoryId,
-          name: head.categoryName!,
-          slug: head.categorySlug!,
+          name: head.categoryName ?? "Uncategorized",
+          slug: head.categorySlug ?? "",
           parentId: null,
         }
       : null,
     gender: head.genderId
       ? {
           id: head.genderId,
-          label: head.genderLabel!,
-          slug: head.genderSlug!,
+          label: head.genderLabel ?? "Unisex",
+          slug: head.genderSlug ?? "unisex",
         }
       : null,
   };
@@ -469,29 +469,29 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
       variantsMap.set(r.variantId, {
         id: r.variantId,
         productId: head.productId,
-        sku: r.variantSku!,
+        sku: r.variantSku ?? "",
         price: r.variantPrice !== null ? String(r.variantPrice) : "0",
         salePrice: r.variantSalePrice !== null ? String(r.variantSalePrice) : null,
-        colorId: r.variantColorId!,
-        sizeId: r.variantSizeId!,
-        inStock: r.variantInStock!,
+        colorId: r.variantColorId ?? "",
+        sizeId: r.variantSizeId ?? "",
+        inStock: r.variantInStock ?? 0,
         weight: r.variantWeight ?? null,
         dimensions: r.variantDimensions as { length?: number; width?: number; height?: number } | null,
         createdAt: r.variantCreatedAt ?? head.productCreatedAt,
-        color: r.colorId
+        color: r.variantColorId
           ? {
-              id: r.colorId,
-              name: r.colorName!,
-              slug: r.colorSlug!,
-              hexCode: r.colorHex!,
+              id: r.variantColorId,
+              name: r.colorName ?? "Default",
+              slug: r.colorSlug ?? "default",
+              hexCode: r.colorHex ?? "#000000",
             }
           : null,
-        size: r.sizeId
+        size: r.variantSizeId
           ? {
-              id: r.sizeId,
-              name: r.sizeName!,
-              slug: r.sizeSlug!,
-              sortOrder: r.sizeSortOrder!,
+              id: r.variantSizeId,
+              name: r.sizeName ?? "Universal",
+              slug: r.sizeSlug ?? "universal",
+              sortOrder: r.sizeSortOrder ?? 0,
             }
           : null,
       });
@@ -501,7 +501,7 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
         id: r.imageId,
         productId: head.productId,
         variantId: r.imageVariantId ?? null,
-        url: r.imageUrl!,
+        url: r.imageUrl ?? "",
         sortOrder: r.imageSortOrder ?? 0,
         isPrimary: r.imageIsPrimary ?? false,
       });

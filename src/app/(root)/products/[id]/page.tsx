@@ -272,8 +272,11 @@ async function AlsoLikeSection({ productId }: { productId: string }) {
 function transformProductToGalleryVariants(data: FullProduct): GalleryVariant[] {
   const { variants, images } = data;
   
+  if (!images || !Array.isArray(images)) return [];
+
   // Collect all images from the product (both variant-specific and generic)
   const allImages = images
+    .filter((img) => img && typeof img.url === 'string' && img.url.trim().length > 0)
     .sort((a, b) => {
       // Primary images first
       if (a.isPrimary && !b.isPrimary) return -1;
@@ -281,33 +284,33 @@ function transformProductToGalleryVariants(data: FullProduct): GalleryVariant[] 
       // Then by sort order
       return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
     })
-    .map((img) => img.url)
-    .filter((url) => url && url.trim().length > 0);
+    .map((img) => img.url);
   
   // If we have images, return them as a single variant
   if (allImages.length > 0) {
     // Try to get the color from the first variant, or use "Default"
-    const firstVariant = variants.find((v) => v.color);
+    const firstVariant = variants?.find((v) => v.color);
     const colorName = firstVariant?.color?.name || "Default";
     
     return [{ color: colorName, images: allImages }];
   }
   
+  if (!variants || !Array.isArray(variants)) return [];
+
   // Fallback: group by variant color if no direct images
   const variantMap = new Map<string, string[]>();
   
   variants.forEach((variant) => {
-    if (!variant.color) return;
+    if (!variant || !variant.color) return;
     const colorName = variant.color.name;
     const variantImages = images
-      .filter((img) => img.variantId === variant.id)
+      .filter((img) => img && img.variantId === variant.id && typeof img.url === 'string' && img.url.trim().length > 0)
       .sort((a, b) => {
         if (a.isPrimary && !b.isPrimary) return -1;
         if (!a.isPrimary && b.isPrimary) return 1;
         return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       })
-      .map((img) => img.url)
-      .filter((url) => url && url.trim().length > 0);
+      .map((img) => img.url);
     
     if (variantImages.length > 0) {
       variantMap.set(colorName, variantImages);
@@ -367,8 +370,23 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const defaultVariant =
     variants.find((v) => v.id === product.defaultVariantId) || variants[0];
 
-  const basePrice = defaultVariant ? Number(defaultVariant.price) : null;
-  const salePrice = defaultVariant?.salePrice ? Number(defaultVariant.salePrice) : null;
+  if (!defaultVariant) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <nav className="py-4 text-caption text-dark-700">
+          <Link href="/" className="hover:underline">Home</Link> / <Link href="/products" className="hover:underline">Products</Link> /{" "}
+          <span className="text-dark-900">{product.name}</span>
+        </nav>
+        <section className="mx-auto max-w-3xl rounded-xl border border-light-300 bg-light-100 p-8 text-center">
+          <h1 className="text-heading-3 text-dark-900">Product details unavailable</h1>
+          <p className="mt-2 text-body text-dark-700">This product is currently unavailable for viewing.</p>
+        </section>
+      </main>
+    );
+  }
+
+  const basePrice = Number(defaultVariant.price);
+  const salePrice = defaultVariant.salePrice ? Number(defaultVariant.salePrice) : null;
 
   const displayPrice = salePrice !== null && !Number.isNaN(salePrice) ? salePrice : basePrice;
   const compareAt = salePrice !== null && !Number.isNaN(salePrice) ? basePrice : null;
@@ -380,6 +398,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const subtitle = product.gender?.label ? `${product.gender.label} Shoes` : undefined;
 
+  // Helper to validate brand logo URL
+  const brandLogoUrl = product.brand?.logoUrl && 
+    (product.brand.logoUrl.startsWith('/') || product.brand.logoUrl.startsWith('http')) 
+    ? product.brand.logoUrl 
+    : null;
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav className="py-4 text-caption text-dark-700">
@@ -390,11 +414,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <section className="grid grid-cols-1 gap-6 md:gap-10 lg:grid-cols-[1fr_480px]">
         {/* Left side: Gallery */}
         <div className="flex flex-col gap-6 relative">
-          {product.brand?.logoUrl && (
+          {brandLogoUrl && (
             <div className="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
               <Image
-                src={product.brand.logoUrl}
-                alt={product.brand.name}
+                src={brandLogoUrl}
+                alt={product.brand?.name || "Brand Logo"}
                 width={64}
                 height={64}
                 className="object-contain"

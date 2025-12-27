@@ -120,12 +120,6 @@ export default function TikTokVideoCards({ videos, title = "TikTok" }: TikTokVid
           <div className="absolute left-0 top-0 bottom-4 w-20 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
         )}
       </div>
-
-      <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
     </section>
   );
 }
