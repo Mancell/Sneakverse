@@ -11,3 +11,5 @@ export { ProductSearchBar } from "./ProductSearchBar";
 export { default as TikTokVideoCards } from "./TikTokVideoCards";
 export { TikTokVideoCard } from "./TikTokVideoCard";
 export type { TikTokVideo } from "./TikTokVideoCard";
+export { default as BlogCard } from "./BlogCard";
+export type { BlogCardProps } from "./BlogCard";
