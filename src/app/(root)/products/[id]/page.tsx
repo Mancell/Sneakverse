@@ -6,9 +6,11 @@ import { Heart, Star } from "lucide-react";
 import ColorSwatches from "@/components/ColorSwatches";
 import AmazonButton from "@/components/AmazonButton";
 import TikTokVideoCards from "@/components/TikTokVideoCards";
+import YouTubeVideoCards from "@/components/YouTubeVideoCards";
 import { AnimatedText } from "@/components/ui/animated-underline-text-one";
-import { getProduct, getProductReviews, getFeaturedReviews, getRecommendedProducts, getTikTokVideos, getProductRating, getProductPriceHistory, type Review, type FeaturedReview, type RecommendedProduct, type FullProduct, type PriceHistoryPoint } from "@/lib/actions/product";
+import { getProduct, getProductReviews, getAllProductReviews, getFeaturedReviews, getRecommendedProducts, getTikTokVideos, getYouTubeVideos, getProductRating, getProductPriceHistory, type Review, type FeaturedReview, type RecommendedProduct, type FullProduct, type PriceHistoryPoint } from "@/lib/actions/product";
 import type { TikTokVideo } from "@/components/TikTokVideoCard";
+import type { YouTubeVideo } from "@/components/YouTubeVideoCard";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import ProductPageNavigation from "@/components/ProductPageNavigation";
 
@@ -80,22 +82,25 @@ async function ProductRating({ productId }: { productId: string }) {
       {/* Rating Info */}
       <div className="pl-3">
         <div className="flex items-center">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <svg
-              key={i}
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill={i <= Math.round(rating.average) ? "#FACC15" : "none"}
-              stroke={i <= Math.round(rating.average) ? "#FACC15" : "#D1D5DB"}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
-            </svg>
-          ))}
+          {[1, 2, 3, 4, 5].map((i) => {
+            const isFullStar = i <= Math.floor(rating.average);
+            return (
+              <svg
+                key={i}
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill={isFullStar ? "#FACC15" : "none"}
+                stroke={isFullStar ? "#FACC15" : "#D1D5DB"}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+              </svg>
+            );
+          })}
           <p className="text-gray-600 font-medium ml-2">{rating.average.toFixed(1)}</p>
         </div>
         <p className="text-sm text-gray-500">
@@ -125,7 +130,7 @@ function NotFoundBlock() {
 
 async function ReviewsSection({ productId }: { productId: string }) {
   const [reviews, featured] = await Promise.all([
-    getProductReviews(productId),
+    getAllProductReviews(productId),
     getFeaturedReviews(productId)
   ]);
   console.log('[ReviewsSection] ProductId:', productId);
@@ -164,12 +169,15 @@ async function ReviewsSection({ productId }: { productId: string }) {
         {count > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Star
-                  key={i}
-                  className={`h-6 w-6 ${i <= Math.round(avg) ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
-                />
-              ))}
+              {[1, 2, 3, 4, 5].map((i) => {
+                const isFullStar = i <= Math.floor(avg);
+                return (
+                  <Star
+                    key={i}
+                    className={`h-6 w-6 ${isFullStar ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
+                  />
+                );
+              })}
             </div>
             <span className="text-2xl font-semibold text-dark-900">
               {avg.toFixed(1)} out of 5
@@ -182,8 +190,8 @@ async function ReviewsSection({ productId }: { productId: string }) {
       </div>
 
       {/* Featured Reviews - Top reviews from our customers */}
-      {featured.length > 0 ? (
-        <div className="space-y-6">
+      {featured.length > 0 && (
+        <div className="space-y-6 mb-8">
           <h3 className="text-lg font-semibold text-dark-900">
             Top reviews from our customers
           </h3>
@@ -235,12 +243,66 @@ async function ReviewsSection({ productId }: { productId: string }) {
             ))}
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* All Customer Reviews */}
+      {sortedReviews.length > 0 ? (
+        <div className="space-y-6">
+          {featured.length > 0 && (
+            <h3 className="text-lg font-semibold text-dark-900">
+              All Customer Reviews
+            </h3>
+          )}
+          <div className="space-y-4">
+            {sortedReviews.map((review) => (
+              <div 
+                key={review.id} 
+                className="border border-gray-200 rounded-lg bg-white p-4 hover:shadow-sm transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <Star
+                            key={i}
+                            className={`h-4 w-4 ${i <= review.rating ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm font-semibold text-dark-900">
+                        {review.rating}.0 out of 5
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-dark-900 mb-1">
+                      {review.author}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {new Date(review.createdAt).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                </div>
+                {review.content && (
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-sm text-gray-800 leading-relaxed">
+                      {review.content}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : featured.length === 0 ? (
         <div className="py-8 text-center">
           <p className="text-body text-dark-700">No customer reviews yet.</p>
           <p className="text-caption text-dark-500 mt-2">Be the first to review this product!</p>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -523,24 +585,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
         </section>
 
-        {/* Customer Reviews Section - Full width */}
-        <Suspense
-          fallback={
-            <section className="rounded-lg border border-light-300 bg-light-100 p-6">
-              <div className="mb-6">
-                <AnimatedText 
-                  text="Customer Reviews" 
-                  textClassName="text-heading-3 text-dark-900 text-left"
-                  className="items-start"
-                />
-              </div>
-              <p className="text-body text-dark-700">Loading reviews…</p>
-            </section>
-          }
-        >
-          <ReviewsSection productId={product.id} />
-        </Suspense>
-
         {/* TikTok Videos Section - Full width */}
         <Suspense
           fallback={
@@ -561,6 +605,46 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           }
         >
           <TikTokVideosSection productId={product.id} />
+        </Suspense>
+
+        {/* YouTube Videos Section - Full width */}
+        <Suspense
+          fallback={
+            <section className="mt-6">
+              <div className="mb-6">
+                <AnimatedText 
+                  text="YouTube" 
+                  textClassName="text-heading-3 text-dark-900 text-left"
+                  className="items-start"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-[400px] animate-pulse rounded-xl bg-light-200" />
+                ))}
+              </div>
+            </section>
+          }
+        >
+          <YouTubeVideosSection productId={product.id} />
+        </Suspense>
+
+        {/* Customer Reviews Section - Full width */}
+        <Suspense
+          fallback={
+            <section className="rounded-lg border border-light-300 bg-light-100 p-6">
+              <div className="mb-6">
+                <AnimatedText 
+                  text="Customer Reviews" 
+                  textClassName="text-heading-3 text-dark-900 text-left"
+                  className="items-start"
+                />
+              </div>
+              <p className="text-body text-dark-700">Loading reviews…</p>
+            </section>
+          }
+        >
+          <ReviewsSection productId={product.id} />
         </Suspense>
 
         {/* Price History Chart Section - Full width */}
@@ -608,6 +692,28 @@ async function TikTokVideosSection({ productId }: { productId: string }) {
   }));
 
   return <TikTokVideoCards videos={formattedVideos} title="TikTok" />;
+}
+
+// YouTube Videos Section Component
+async function YouTubeVideosSection({ productId }: { productId: string }) {
+  const videos = await getYouTubeVideos(productId);
+  
+  console.log('[YouTubeVideosSection] Product ID:', productId);
+  console.log('[YouTubeVideosSection] Videos count:', videos.length);
+  console.log('[YouTubeVideosSection] Videos:', videos);
+  
+  if (videos.length === 0) return null;
+
+  // Convert YouTubeVideoCard to YouTubeVideo format
+  const formattedVideos: YouTubeVideo[] = videos.map(v => ({
+    id: v.id,
+    videoUrl: v.videoUrl,
+    thumbnailUrl: v.thumbnailUrl ?? undefined,
+    title: v.title ?? undefined,
+    author: v.author ?? undefined,
+  }));
+
+  return <YouTubeVideoCards videos={formattedVideos} title="YouTube" />;
 }
 
 // Price History Section Component

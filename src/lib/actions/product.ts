@@ -545,6 +545,25 @@ export type RecommendedProduct = {
 
 export async function getProductRating(productId: string): Promise<{ average: number; count: number } | null> {
   try {
+    // First check if product has manual rating
+    const [product] = await db
+      .select({
+        manualRating: products.manualRating,
+        manualReviewCount: products.manualReviewCount,
+      })
+      .from(products)
+      .where(eq(products.id, productId))
+      .limit(1);
+
+    // If manual rating exists, use it
+    if (product?.manualRating) {
+      return {
+        average: Number(product.manualRating),
+        count: product.manualReviewCount ? Number(product.manualReviewCount) : 0,
+      };
+    }
+
+    // Otherwise, calculate from actual reviews
     const result = await db
       .select({
         average: sql<number>`COALESCE(AVG(${reviews.rating})::numeric, 0)`,
@@ -574,18 +593,45 @@ export async function getProductReviews(productId: string): Promise<Review[]> {
       rating: reviews.rating,
       comment: reviews.comment,
       createdAt: reviews.createdAt,
+      reviewerName: reviews.reviewerName,
       authorName: users.name,
       authorEmail: users.email,
     })
     .from(reviews)
-    .innerJoin(users, eq(users.id, reviews.userId))
+    .leftJoin(users, eq(users.id, reviews.userId))
     .where(eq(reviews.productId, productId))
     .orderBy(desc(reviews.createdAt))
     .limit(10);
 
   return rows.map((r) => ({
     id: r.id,
-    author: r.authorName?.trim() || r.authorEmail || "Anonymous",
+    author: r.reviewerName?.trim() || r.authorName?.trim() || r.authorEmail || "Anonymous",
+    rating: r.rating,
+    title: undefined,
+    content: r.comment || "",
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+export async function getAllProductReviews(productId: string): Promise<Review[]> {
+  const rows = await db
+    .select({
+      id: reviews.id,
+      rating: reviews.rating,
+      comment: reviews.comment,
+      createdAt: reviews.createdAt,
+      reviewerName: reviews.reviewerName,
+      authorName: users.name,
+      authorEmail: users.email,
+    })
+    .from(reviews)
+    .leftJoin(users, eq(users.id, reviews.userId))
+    .where(eq(reviews.productId, productId))
+    .orderBy(desc(reviews.createdAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    author: r.reviewerName?.trim() || r.authorName?.trim() || r.authorEmail || "Anonymous",
     rating: r.rating,
     title: undefined,
     content: r.comment || "",
@@ -733,6 +779,43 @@ export async function getTikTokVideos(productId: string): Promise<TikTokVideoCar
     }));
   } catch (error) {
     console.error("[getTikTokVideos] Error:", error);
+    return [];
+  }
+}
+
+export type YouTubeVideoCard = {
+  id: string;
+  videoUrl: string;
+  thumbnailUrl?: string;
+  title?: string;
+  author?: string;
+};
+
+export async function getYouTubeVideos(productId: string): Promise<YouTubeVideoCard[]> {
+  try {
+    const { youtubeVideos } = await import('@/lib/db/schema/social-media');
+    const rows = await db
+      .select({
+        id: youtubeVideos.id,
+        videoUrl: youtubeVideos.videoUrl,
+        thumbnailUrl: youtubeVideos.thumbnailUrl,
+        title: youtubeVideos.title,
+        author: youtubeVideos.author,
+      })
+      .from(youtubeVideos)
+      .where(eq(youtubeVideos.productId, productId))
+      .orderBy(asc(youtubeVideos.sortOrder))
+      .limit(5);
+
+    return rows.map((r) => ({
+      id: r.id,
+      videoUrl: r.videoUrl,
+      thumbnailUrl: r.thumbnailUrl ?? undefined,
+      title: r.title ?? undefined,
+      author: r.author ?? undefined,
+    }));
+  } catch (error) {
+    console.error("[getYouTubeVideos] Error:", error);
     return [];
   }
 }

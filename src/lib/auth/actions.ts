@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { guests, carts, cartItems } from "@/lib/db/schema/index";
 import { and, eq, lt, isNull, gt } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { getUserRole } from "./admin";
 
 const COOKIE_OPTIONS = {
   httpOnly: true as const,
@@ -164,6 +165,12 @@ export async function signIn(formData: FormData) {
 
     // Migrate guest cart to user cart
     await migrateGuestCartToUser(res.user.id);
+
+    // Check user role and redirect to admin if applicable
+    const role = await getUserRole(res.user.id);
+    if (role === "admin" || role === "editor") {
+      return { ok: true, userId: res.user.id, redirectTo: "/admin" };
+    }
 
     return { ok: true, userId: res.user.id };
   } catch (error) {

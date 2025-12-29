@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -27,9 +27,14 @@
     "db:manual-price-history": "tsx src/lib/db/manual-add-price-history.ts",
     "db:check-price-history": "tsx src/lib/db/check-price-history.ts",
     "db:check-tiktok": "tsx src/lib/db/check-tiktok-videos.ts",
+    "db:migrate-reviews": "tsx src/lib/db/migrate-reviews.ts",
+    "db:migrate-product-rating": "tsx src/lib/db/migrate-product-rating.ts",
+    "db:migrate-youtube-videos": "tsx src/lib/db/migrate-youtube-videos.ts",
+    "db:check-youtube": "tsx src/lib/db/check-youtube-videos.ts",
     "db:clean-old-tiktok": "tsx src/lib/db/clean-old-tiktok-videos.ts",
     "db:remove-tiktok-embeds": "tsx src/lib/db/remove-tiktok-embed-urls.ts",
-    "db:update-brand-logos": "tsx src/lib/db/update-brand-logos.ts"
+    "db:update-brand-logos": "tsx src/lib/db/update-brand-logos.ts",
+    "db:create-first-admin": "tsx src/lib/db/create-first-admin.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.1.0",

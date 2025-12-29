@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, boolean, numeric, integer } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { z } from 'zod';
 import { categories } from './categories';
@@ -19,6 +19,8 @@ export const products = pgTable('products', {
   isPublished: boolean('is_published').notNull().default(false),
   defaultVariantId: uuid('default_variant_id'),
   amazonUrl: text('amazon_url'),
+  manualRating: numeric('manual_rating', { precision: 3, scale: 2 }),
+  manualReviewCount: integer('manual_review_count'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -55,6 +57,8 @@ export const insertProductSchema = z.object({
   isPublished: z.boolean().optional(),
   defaultVariantId: z.string().uuid().optional().nullable(),
   amazonUrl: z.string().url().optional().nullable(),
+  manualRating: z.string().optional().nullable(),
+  manualReviewCount: z.number().int().min(0).optional().nullable(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });

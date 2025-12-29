@@ -7,7 +7,8 @@ import { users } from './user';
 export const reviews = pgTable('reviews', {
   id: uuid('id').primaryKey().defaultRandom(),
   productId: uuid('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  reviewerName: text('reviewer_name'),
   rating: integer('rating').notNull(),
   comment: text('comment'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -28,7 +29,8 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
 
 export const insertReviewSchema = z.object({
   productId: z.string().uuid(),
-  userId: z.string().uuid(),
+  userId: z.string().uuid().optional().nullable(),
+  reviewerName: z.string().optional().nullable(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().optional().nullable(),
   createdAt: z.date().optional(),

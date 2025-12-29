@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type Props = {
   mode: "sign-in" | "sign-up";
-  onSubmit: (formData: FormData) => Promise<{ ok: boolean; userId?: string } | void>;
+  onSubmit: (formData: FormData) => Promise<{ ok: boolean; userId?: string; redirectTo?: string } | void>;
 };
 
 export default function AuthForm({ mode, onSubmit }: Props) {
@@ -25,8 +25,9 @@ export default function AuthForm({ mode, onSubmit }: Props) {
       const result = await onSubmit(formData);
 
       if(result?.ok) {
-        const redirect = searchParams.get("redirect");
-        router.push(redirect || "/");
+        const redirectParam = searchParams.get("redirect");
+        const redirectTo = (result as { redirectTo?: string }).redirectTo || redirectParam || "/";
+        router.push(redirectTo);
       }
     } catch (e) {
       console.log("error", e);
@@ -38,7 +39,7 @@ export default function AuthForm({ mode, onSubmit }: Props) {
       <div className="text-center">
         <p className="text-caption text-dark-700">
           {mode === "sign-in" ? "Don’t have an account? " : "Already have an account? "}
-          <Link href={mode === "sign-in" ? "/sign-up" : "/sign-in"} className="underline">
+          <Link href={mode === "sign-in" ? "/auth/sign-up" : "/auth/sign-in"} className="underline">
             {mode === "sign-in" ? "Sign Up" : "Sign In"}
           </Link>
         </p>

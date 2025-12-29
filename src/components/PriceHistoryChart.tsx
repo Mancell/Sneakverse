@@ -56,33 +56,75 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
   // Filter data based on selected period
   const filteredData = useMemo(() => {
     const now = new Date();
-    const cutoffDate = new Date();
+    let cutoffDate: Date;
     
     switch (selectedPeriod) {
-      case '3months':
+      case '3months': {
+        cutoffDate = new Date(now);
         cutoffDate.setMonth(now.getMonth() - 3);
+        // Handle year rollover
+        if (cutoffDate.getMonth() > now.getMonth()) {
+          cutoffDate.setFullYear(now.getFullYear() - 1);
+        }
         break;
-      case '6months':
+      }
+      case '6months': {
+        cutoffDate = new Date(now);
         cutoffDate.setMonth(now.getMonth() - 6);
+        // Handle year rollover
+        if (cutoffDate.getMonth() > now.getMonth()) {
+          cutoffDate.setFullYear(now.getFullYear() - 1);
+        }
         break;
-      case '1year':
+      }
+      case '1year': {
+        cutoffDate = new Date(now);
         cutoffDate.setFullYear(now.getFullYear() - 1);
         break;
+      }
+      default:
+        cutoffDate = new Date(0); // Beginning of time
+    }
+
+    // Ensure cutoffDate is valid
+    if (isNaN(cutoffDate.getTime())) {
+      cutoffDate = new Date(0);
     }
 
     return data.filter(point => {
-      const pointDate = new Date(point.date);
-      return pointDate >= cutoffDate;
+      try {
+        const pointDate = new Date(point.date);
+        // Ensure pointDate is valid
+        if (isNaN(pointDate.getTime())) {
+          return false;
+        }
+        return pointDate >= cutoffDate;
+      } catch (error) {
+        console.error('[PriceHistoryChart] Error parsing date:', point.date, error);
+        return false;
+      }
     });
   }, [data, selectedPeriod]);
 
   // Format data for chart
-  const chartData = filteredData.map((point) => ({
-    date: new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    fullDate: point.date,
-    price: point.price,
-    salePrice: point.salePrice || point.price,
-  }));
+  const chartData = filteredData.map((point) => {
+    try {
+      const pointDate = new Date(point.date);
+      if (isNaN(pointDate.getTime())) {
+        console.warn('[PriceHistoryChart] Invalid date:', point.date);
+        return null;
+      }
+      return {
+        date: pointDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        fullDate: point.date,
+        price: typeof point.price === 'number' && !isNaN(point.price) ? point.price : 0,
+        salePrice: (typeof point.salePrice === 'number' && !isNaN(point.salePrice) ? point.salePrice : (typeof point.price === 'number' && !isNaN(point.price) ? point.price : 0)) || 0,
+      };
+    } catch (error) {
+      console.error('[PriceHistoryChart] Error formatting point:', point, error);
+      return null;
+    }
+  }).filter((point): point is NonNullable<typeof point> => point !== null);
 
   // Calculate min and max for better Y-axis scaling
   const allPrices = [...chartData.map(d => d.price), ...chartData.map(d => d.salePrice)].filter(Boolean) as number[];
@@ -226,7 +268,10 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
 
           <div className="h-[220px] w-full mb-5 bg-gray-50/50 rounded-lg p-3 border border-gray-100">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 15, left: 5, bottom: 10 }}>
+              <LineChart 
+                data={chartData} 
+                margin={{ top: 10, right: 15, left: 5, bottom: 10 }}
+              >
                 <defs>
                   <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FF9900" stopOpacity={0.2}/>
@@ -281,6 +326,8 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
                   dot={false}
                   activeDot={{ r: 5, fill: '#146eb4', strokeWidth: 2, stroke: '#fff' }}
                   name="Sale Price"
+                  animationDuration={300}
+                  isAnimationActive={true}
                 />
                 <Line 
                   type="monotone" 
@@ -290,6 +337,8 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
                   dot={false}
                   activeDot={{ r: 5, fill: '#FF9900', strokeWidth: 2, stroke: '#fff' }}
                   name="Regular Price"
+                  animationDuration={300}
+                  isAnimationActive={true}
                 />
               </LineChart>
             </ResponsiveContainer>
