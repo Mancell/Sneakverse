@@ -1,10 +1,17 @@
 "use server";
 
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { getAllProducts, getAllBrands } from "./product";
 import type { ProductListItem } from "./product";
 
-export async function searchProducts(query: string, limit: number = 10): Promise<ProductListItem[]> {
+const searchProductsImpl = async (query: string, limit: number = 10): Promise<ProductListItem[]> => {
   if (!query || query.trim().length === 0) {
+    return [];
+  }
+
+  // Minimum 2 characters for search
+  if (query.trim().length < 2) {
     return [];
   }
 
@@ -29,7 +36,19 @@ export async function searchProducts(query: string, limit: number = 10): Promise
     console.error("[searchProducts] Error:", error);
     return [];
   }
-}
+};
+
+// Optimized cache - shorter TTL for faster updates, query-specific cache key
+export const searchProducts = cache(
+  unstable_cache(
+    searchProductsImpl,
+    ['search-products'],
+    { 
+      revalidate: 10, // Reduced to 10 seconds for faster results
+      tags: ['products', 'search'] 
+    }
+  )
+);
 
 export async function searchBrands(query: string): Promise<Array<{ id: string; name: string; slug: string; logoUrl: string | null }>> {
   try {

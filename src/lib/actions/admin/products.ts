@@ -225,6 +225,9 @@ export async function createProduct(data: z.infer<typeof createProductSchema>) {
         amazonUrl: validated.amazonUrl,
         manualRating: processedManualRating,
         manualReviewCount: processedManualReviewCount,
+        metaTitle: validated.metaTitle || null,
+        metaDescription: validated.metaDescription || null,
+        metaKeywords: validated.metaKeywords || null,
       })
       .returning();
 
@@ -314,6 +317,17 @@ export async function updateProduct(data: z.infer<typeof updateProductSchema>) {
         : processedData.manualReviewCount;
       processedData.manualReviewCount = (isNaN(countValue) || countValue < 0) ? null : countValue;
     }
+  }
+
+  // SEO alanlarını işle
+  if (processedData.metaTitle !== undefined) {
+    processedData.metaTitle = processedData.metaTitle?.trim() || null;
+  }
+  if (processedData.metaDescription !== undefined) {
+    processedData.metaDescription = processedData.metaDescription?.trim() || null;
+  }
+  if (processedData.metaKeywords !== undefined) {
+    processedData.metaKeywords = processedData.metaKeywords?.trim() || null;
   }
 
   await db

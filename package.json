@@ -34,6 +34,7 @@
     "db:clean-old-tiktok": "tsx src/lib/db/clean-old-tiktok-videos.ts",
     "db:remove-tiktok-embeds": "tsx src/lib/db/remove-tiktok-embed-urls.ts",
     "db:update-brand-logos": "tsx src/lib/db/update-brand-logos.ts",
+    "db:migrate-seo": "tsx src/lib/db/migrate-seo-fields.ts",
     "db:create-first-admin": "tsx src/lib/db/create-first-admin.ts"
   },
   "dependencies": {

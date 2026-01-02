@@ -1,11 +1,11 @@
 import { requireAuth, getUserRole } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
-import { products, orders } from "@/lib/db/schema/index";
+import { products } from "@/lib/db/schema/index";
 import { tiktokVideos } from "@/lib/db/schema/social-media";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { getAllBlogPosts } from "@/lib/data/blog";
 import Link from "next/link";
-import { Package, FileText, Video, ShoppingCart, DollarSign } from "lucide-react";
+import { Package, FileText, Video } from "lucide-react";
 
 export default async function AdminDashboard() {
   let user;
@@ -30,23 +30,11 @@ export default async function AdminDashboard() {
     publishedProducts,
     totalBlogPosts,
     totalVideos,
-    totalOrders,
-    totalRevenue,
   ] = await Promise.all([
     db.select({ count: count() }).from(products),
     db.select({ count: count() }).from(products).where(eq(products.isPublished, true)),
     Promise.resolve({ count: getAllBlogPosts().length }),
     db.select({ count: count() }).from(tiktokVideos),
-    db
-      .select({ count: count() })
-      .from(orders)
-      .where(eq(orders.status, "paid")),
-    db
-      .select({
-        total: sql<number>`COALESCE(SUM(${orders.totalAmount}), 0)`,
-      })
-      .from(orders)
-      .where(eq(orders.status, "paid")),
   ]);
 
   const stats = [
@@ -72,27 +60,12 @@ export default async function AdminDashboard() {
       href: "/admin/videos",
       color: "bg-purple-500",
     },
-    {
-      title: "Orders",
-      value: totalOrders[0]?.count || 0,
-      icon: ShoppingCart,
-      href: "/admin/orders",
-      color: "bg-orange-500",
-    },
-    {
-      title: "Revenue",
-      value: `$${Number(totalRevenue[0]?.total || 0).toFixed(2)}`,
-      icon: DollarSign,
-      href: "/admin/orders",
-      color: "bg-emerald-500",
-    },
   ];
 
   const quickActions = [
     { title: "Add New Product", href: "/admin/products/new", roles: ["admin", "editor"] },
     { title: "Create Blog Post", href: "/admin/blog/new", roles: ["admin", "editor"] },
     { title: "Add Video", href: "/admin/videos/new", roles: ["admin", "editor"] },
-    { title: "View Orders", href: "/admin/orders", roles: ["admin", "editor", "viewer"] },
   ].filter((action) => action.roles.includes(role));
 
   return (

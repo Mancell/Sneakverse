@@ -31,11 +31,11 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-light-100">
+    <div className="min-h-screen bg-light-50">
       <AdminHeader user={user} role={role} />
       <div className="flex">
         <AdminSidebar role={role} />
-        <main className="flex-1 p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-6 lg:p-8 bg-light-50 min-h-[calc(100vh-4rem)]">{children}</main>
       </div>
     </div>
   );

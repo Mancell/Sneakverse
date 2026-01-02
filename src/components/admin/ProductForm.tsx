@@ -19,6 +19,9 @@ interface ProductFormProps {
     amazonUrl: string | null;
     manualRating: string | null;
     manualReviewCount: number | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    metaKeywords: string | null;
   };
   brands: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string }>;
@@ -147,6 +150,9 @@ export default function ProductForm({
       amazonUrl: formData.get("amazonUrl") as string || null,
       manualRating,
       manualReviewCount,
+      metaTitle: (formData.get("metaTitle") as string)?.trim() || null,
+      metaDescription: (formData.get("metaDescription") as string)?.trim() || null,
+      metaKeywords: (formData.get("metaKeywords") as string)?.trim() || null,
     };
 
     startTransition(async () => {
@@ -439,6 +445,59 @@ export default function ProductForm({
             <label htmlFor="isPublished" className="text-body text-dark-900">
               Publish immediately
             </label>
+          </div>
+        </div>
+      </div>
+
+      {/* SEO Settings */}
+      <div className="rounded-xl border border-light-300 bg-white p-6">
+        <h2 className="text-heading-3 text-dark-900 mb-4">SEO Settings</h2>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="metaTitle" className="block text-caption font-medium text-dark-900 mb-1">
+              Meta Title
+            </label>
+            <input
+              type="text"
+              id="metaTitle"
+              name="metaTitle"
+              defaultValue={product?.metaTitle || ""}
+              maxLength={60}
+              placeholder="SEO title (recommended: 50-60 characters)"
+              className="w-full rounded-lg border border-light-300 bg-light-100 px-4 py-2 text-body text-dark-900 focus:outline-none focus:ring-2 focus:ring-dark-900/10"
+            />
+            <p className="mt-1 text-footnote text-dark-700">Leave empty to use product name</p>
+          </div>
+
+          <div>
+            <label htmlFor="metaDescription" className="block text-caption font-medium text-dark-900 mb-1">
+              Meta Description
+            </label>
+            <textarea
+              id="metaDescription"
+              name="metaDescription"
+              defaultValue={product?.metaDescription || ""}
+              rows={3}
+              maxLength={160}
+              placeholder="SEO description (recommended: 150-160 characters)"
+              className="w-full rounded-lg border border-light-300 bg-light-100 px-4 py-2 text-body text-dark-900 focus:outline-none focus:ring-2 focus:ring-dark-900/10"
+            />
+            <p className="mt-1 text-footnote text-dark-700">Leave empty to use product description</p>
+          </div>
+
+          <div>
+            <label htmlFor="metaKeywords" className="block text-caption font-medium text-dark-900 mb-1">
+              Meta Keywords
+            </label>
+            <input
+              type="text"
+              id="metaKeywords"
+              name="metaKeywords"
+              defaultValue={product?.metaKeywords || ""}
+              placeholder="Comma-separated keywords (e.g., sneakers, running shoes, athletic)"
+              className="w-full rounded-lg border border-light-300 bg-light-100 px-4 py-2 text-body text-dark-900 focus:outline-none focus:ring-2 focus:ring-dark-900/10"
+            />
+            <p className="mt-1 text-footnote text-dark-700">Separate keywords with commas</p>
           </div>
         </div>
       </div>

@@ -26,6 +26,7 @@ export default function BlogCard({
   return (
     <Link
       href={href}
+      prefetch={true}
       className={`group block rounded-xl bg-light-100 ring-1 ring-light-300 transition-all hover:ring-dark-500 hover:shadow-lg ${className}`}
     >
       <article className="flex flex-col h-full">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { Card, CollapsibleSection, ProductGallery } from "@/components";
 import { Heart, Star } from "lucide-react";
@@ -8,10 +9,10 @@ import AmazonButton from "@/components/AmazonButton";
 import TikTokVideoCards from "@/components/TikTokVideoCards";
 import YouTubeVideoCards from "@/components/YouTubeVideoCards";
 import { AnimatedText } from "@/components/ui/animated-underline-text-one";
-import { getProduct, getProductReviews, getAllProductReviews, getFeaturedReviews, getRecommendedProducts, getTikTokVideos, getYouTubeVideos, getProductRating, getProductPriceHistory, type Review, type FeaturedReview, type RecommendedProduct, type FullProduct, type PriceHistoryPoint } from "@/lib/actions/product";
+import { getProduct, getProductReviews, getAllProductReviews, getRecommendedProducts, getTikTokVideos, getYouTubeVideos, getProductRating, getProductPriceHistory, type Review, type RecommendedProduct, type FullProduct, type PriceHistoryPoint } from "@/lib/actions/product";
 import type { TikTokVideo } from "@/components/TikTokVideoCard";
 import type { YouTubeVideo } from "@/components/YouTubeVideoCard";
-import PriceHistoryChart from "@/components/PriceHistoryChart";
+import PriceHistorySection from "@/components/PriceHistorySection";
 import ProductPageNavigation from "@/components/ProductPageNavigation";
 
 type GalleryVariant = { color: string; images: string[] };
@@ -129,30 +130,24 @@ function NotFoundBlock() {
 }
 
 async function ReviewsSection({ productId }: { productId: string }) {
-  const [reviews, featured] = await Promise.all([
-    getAllProductReviews(productId),
-    getFeaturedReviews(productId)
-  ]);
+  const reviews = await getAllProductReviews(productId);
   console.log('[ReviewsSection] ProductId:', productId);
   console.log('[ReviewsSection] Reviews count:', reviews.length);
-  console.log('[ReviewsSection] Featured reviews count:', featured.length);
-  const count = reviews.length;
-  const avg = count > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / count : 0;
+  
+  // Use manual rating if available, otherwise calculate from reviews
+  const ratingData = await getProductRating(productId);
+  const count = ratingData?.count || reviews.length;
+  const avg = ratingData?.average || (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
 
-  // Calculate star distribution
-  const starDistribution = [5, 4, 3, 2, 1].map(star => ({
-    star,
-    count: reviews.filter(r => r.rating === star).length,
-    percentage: count > 0 ? (reviews.filter(r => r.rating === star).length / count) * 100 : 0
-  }));
-
-  // Sort reviews by rating (highest first), then by date (newest first)
-  const sortedReviews = [...reviews].sort((a, b) => {
-    if (b.rating !== a.rating) {
-      return b.rating - a.rating; // Higher rating first
-    }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Newer first
-  });
+  // Get top reviews: sort by rating (highest first), then by date (newest first), limit to 5
+  const topReviews = [...reviews]
+    .sort((a, b) => {
+      if (b.rating !== a.rating) {
+        return b.rating - a.rating; // Higher rating first
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Newer first
+    })
+    .slice(0, 5);
 
   return (
     <section id="customer-reviews" className="rounded-lg border border-light-300 bg-white p-6 scroll-mt-24">
@@ -189,120 +184,73 @@ async function ReviewsSection({ productId }: { productId: string }) {
         )}
       </div>
 
-      {/* Featured Reviews - Top reviews from our customers */}
-      {featured.length > 0 && (
-        <div className="space-y-6 mb-8">
+      {/* Top reviews from our customers */}
+      {topReviews.length > 0 ? (
+        <div className="space-y-6">
           <h3 className="text-lg font-semibold text-dark-900">
             Top reviews from our customers
           </h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {featured.map((review) => (
-              <div 
-                key={review.id} 
-                className="border border-gray-200 rounded bg-white p-4 hover:shadow-md transition-shadow flex flex-col"
-              >
-                <div className="mb-3 flex-shrink-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <Star
-                          key={i}
-                          className={`h-3.5 w-3.5 ${i <= review.rating ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs font-semibold text-dark-900">
-                      {review.rating}.0 out of 5
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-dark-900 mb-1">
-                    {review.firstName} {review.lastName}
-                  </p>
-                  <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span>Verified Purchase</span>
-                  </div>
-                </div>
-                <div className="border-t border-gray-100 pt-3 flex-1 flex flex-col">
-                  <p className="text-xs text-gray-800 leading-relaxed flex-1">
-                    {review.comment}
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center gap-3 text-xs text-gray-600 flex-shrink-0">
-                  <button className="flex items-center gap-1 hover:text-[#FFA41C] transition-colors">
-                    <span>Helpful</span>
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                    </svg>
-                    <span>(0)</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* All Customer Reviews */}
-      {sortedReviews.length > 0 ? (
-        <div className="space-y-6">
-          {featured.length > 0 && (
-            <h3 className="text-lg font-semibold text-dark-900">
-              All Customer Reviews
-            </h3>
-          )}
-          <div className="space-y-4">
-            {sortedReviews.map((review) => (
-              <div 
-                key={review.id} 
-                className="border border-gray-200 rounded-lg bg-white p-4 hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
+            {topReviews.map((review) => {
+              // Parse reviewer name (could be "FirstName LastName" or just a single name)
+              const reviewerNameParts = review.author?.split(' ') || [];
+              const firstName = reviewerNameParts[0] || review.author || 'Anonymous';
+              const lastName = reviewerNameParts.slice(1).join(' ') || '';
+              
+              return (
+                <div 
+                  key={review.id} 
+                  className="border border-gray-200 rounded bg-white p-4 hover:shadow-md transition-shadow flex flex-col"
+                >
+                  <div className="mb-3 flex-shrink-0">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="flex items-center gap-0.5">
                         {[1, 2, 3, 4, 5].map((i) => (
                           <Star
                             key={i}
-                            className={`h-4 w-4 ${i <= review.rating ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
+                            className={`h-3.5 w-3.5 ${i <= review.rating ? "fill-[#FFA41C] text-[#FFA41C]" : "text-gray-300"}`}
                           />
                         ))}
                       </div>
-                      <span className="text-sm font-semibold text-dark-900">
+                      <span className="text-xs font-semibold text-dark-900">
                         {review.rating}.0 out of 5
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-dark-900 mb-1">
-                      {review.author}
+                      {review.author || 'Anonymous'}
                     </p>
-                    <p className="text-xs text-gray-600">
-                      {new Date(review.createdAt).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
+                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span>Verified Purchase</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-100 pt-3 flex-1 flex flex-col">
+                    <p className="text-xs text-gray-800 leading-relaxed flex-1">
+                      {review.content || 'No comment provided.'}
                     </p>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3 text-xs text-gray-600 flex-shrink-0">
+                    <button className="flex items-center gap-1 hover:text-[#FFA41C] transition-colors">
+                      <span>Helpful</span>
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                      </svg>
+                      <span>(0)</span>
+                    </button>
                   </div>
                 </div>
-                {review.content && (
-                  <div className="border-t border-gray-100 pt-3">
-                    <p className="text-sm text-gray-800 leading-relaxed">
-                      {review.content}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
-      ) : featured.length === 0 ? (
+      ) : (
         <div className="py-8 text-center">
           <p className="text-body text-dark-700">No customer reviews yet.</p>
           <p className="text-caption text-dark-500 mt-2">Be the first to review this product!</p>
         </div>
-      ) : null}
+      )}
     </section>
   );
 }
@@ -649,7 +597,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
         {/* Price History Chart Section - Full width */}
         <div id="price-history" className="scroll-mt-24">
-          <PriceHistorySection productId={product.id} />
+          <Suspense
+            fallback={
+              <div className="mt-6 min-h-[400px] flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-body text-dark-700">Loading price history...</p>
+                </div>
+              </div>
+            }
+          >
+            <PriceHistorySectionWrapper productId={product.id} />
+          </Suspense>
         </div>
       </div>
 
@@ -717,26 +675,18 @@ async function YouTubeVideosSection({ productId }: { productId: string }) {
 }
 
 // Price History Section Component
-async function PriceHistorySection({ productId }: { productId: string }) {
-  console.log('[PriceHistorySection] Starting, ProductId:', productId);
+async function PriceHistorySectionWrapper({ productId }: { productId: string }) {
+  console.log('[PriceHistorySectionWrapper] Starting, ProductId:', productId);
   
   try {
     const priceHistory = await getProductPriceHistory(productId, 12);
-    console.log('[PriceHistorySection] Price history count:', priceHistory.length);
-    console.log('[PriceHistorySection] Price history data:', priceHistory);
+    console.log('[PriceHistorySectionWrapper] Price history count:', priceHistory.length);
+    console.log('[PriceHistorySectionWrapper] Price history data:', priceHistory);
     
-    // Always render the chart, even if empty
-    return (
-      <div className="mt-6">
-        <PriceHistoryChart data={priceHistory} />
-      </div>
-    );
+    // Pass data to client component
+    return <PriceHistorySection data={priceHistory} productId={productId} />;
   } catch (error) {
-    console.error('[PriceHistorySection] Error:', error);
-    return (
-      <div className="mt-6">
-        <PriceHistoryChart data={[]} />
-      </div>
-    );
+    console.error('[PriceHistorySectionWrapper] Error:', error);
+    return <PriceHistorySection data={[]} productId={productId} />;
   }
 }

@@ -1,38 +1,67 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Card } from "@/components";
-import BlogCard from "@/components/BlogCard";
 import { AnimatedText } from "@/components/ui/animated-underline-text-one";
-import { getCurrentUser } from "@/lib/auth/actions";
 import { getAllProducts } from "@/lib/actions/product";
 import { getAllBlogPosts } from "@/lib/data/blog";
 
-const Home = async () => {
-  const user = await getCurrentUser();
-  console.log('USER:', user);
+// Lazy load blog section
+const BlogCard = dynamic(() => import('@/components/BlogCard'), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-light-200" />
+});
 
-  // Veritabanından en yeni 4 ürünü çek
-  const { products } = await getAllProducts({
-    search: undefined,
-    genderSlugs: [],
-    brandSlugs: [],
-    categorySlugs: [],
-    sizeSlugs: [],
-    colorSlugs: [],
-    priceMin: undefined,
-    priceMax: undefined,
-    priceRanges: [],
-    sort: "newest",
-    page: 1,
-    limit: 4,
-  });
-
-  // Blog posts - en son 3 tanesini göster
+// Blog section component - lazy loaded
+async function BlogSection() {
   const allBlogPosts = getAllBlogPosts();
   const blogPosts = allBlogPosts.slice(0, 3);
 
-  console.log('[HomePage] Blog posts count:', blogPosts.length);
+  if (!blogPosts || blogPosts.length === 0) {
+    return (
+      <div className="rounded-lg border border-light-300 bg-light-100 p-12 text-center">
+        <p className="text-body-medium text-dark-900 mb-2">No blog posts available</p>
+        <p className="text-body text-dark-700">Check back soon for the latest news and updates.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {blogPosts.map((post) => (
+        <BlogCard
+          key={post.id}
+          title={post.title}
+          excerpt={post.excerpt}
+          imageSrc={post.imageSrc}
+          imageAlt={post.title}
+          href={post.href}
+          date={post.date}
+          category={post.category}
+        />
+      ))}
+    </div>
+  );
+}
+
+const Home = async () => {
+  // Parallel data fetching - products ve blog posts aynı anda çekiliyor
+  const [{ products }] = await Promise.all([
+    getAllProducts({
+      search: undefined,
+      genderSlugs: [],
+      brandSlugs: [],
+      categorySlugs: [],
+      sizeSlugs: [],
+      colorSlugs: [],
+      priceMin: undefined,
+      priceMax: undefined,
+      priceRanges: [],
+      sort: "newest",
+      page: 1,
+      limit: 4,
+    }),
+  ]);
 
   return (
     <main>
@@ -149,7 +178,7 @@ const Home = async () => {
         )}
       </section>
 
-      {/* Blog Section */}
+      {/* Blog Section - Lazy loaded with Suspense */}
       <section aria-labelledby="blog" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 bg-light-100/50">
         <div id="blog" className="mb-8 flex items-center justify-between">
           <AnimatedText 
@@ -159,32 +188,23 @@ const Home = async () => {
           />
           <Link
             href="/blog"
+            prefetch={true}
             className="text-body font-semibold text-dark-900 hover:text-dark-700 transition-colors underline"
           >
             View All →
           </Link>
         </div>
-        {blogPosts && blogPosts.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {blogPosts.map((post) => (
-              <BlogCard
-                key={post.id}
-                title={post.title}
-                excerpt={post.excerpt}
-                imageSrc={post.imageSrc}
-                imageAlt={post.title}
-                href={post.href}
-                date={post.date}
-                category={post.category}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-light-300 bg-light-100 p-12 text-center">
-            <p className="text-body-medium text-dark-900 mb-2">No blog posts available</p>
-            <p className="text-body text-dark-700">Check back soon for the latest news and updates.</p>
-          </div>
-        )}
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-64 animate-pulse rounded-xl bg-light-200" />
+              ))}
+            </div>
+          }
+        >
+          <BlogSection />
+        </Suspense>
       </section>
     </main>
   );

@@ -142,7 +142,9 @@ function getYouTubeThumbnailUrl(url: string): string {
   }
   
   if (videoId) {
-    return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    // Try maxresdefault first, fallback to hqdefault if not available
+    // hqdefault is more reliable, especially for YouTube Shorts
+    return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
   }
 
   return '';
@@ -180,8 +182,8 @@ export function YouTubeVideoCard({ video, isPlaying: externalIsPlaying, onPlayCh
     
     setEmbedUrl(embed);
     
-    // Thumbnail URL'ini al
-    const thumb = video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoUrl);
+    // Thumbnail URL'ini al - fallback ekle
+    const thumb = video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoUrl) || '/images/video-placeholder.jpg';
     console.log('[YouTubeVideoCard] Thumbnail URL:', thumb);
     setThumbnailUrl(thumb);
   }, [video.videoUrl, video.thumbnailUrl, video.id]);
@@ -284,6 +286,23 @@ export function YouTubeVideoCard({ video, isPlaying: externalIsPlaying, onPlayCh
                 alt={video.title || "YouTube video thumbnail"}
                 fill
                 className="object-cover"
+                onError={(e) => {
+                  // Fallback to default thumbnail if hqdefault fails
+                  const target = e.target as HTMLImageElement;
+                  if (target.src.includes('hqdefault.jpg')) {
+                    // Try mqdefault as fallback
+                    const videoId = thumbnailUrl.match(/\/vi\/([^\/]+)\//)?.[1];
+                    if (videoId) {
+                      target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                    }
+                  } else if (target.src.includes('mqdefault.jpg')) {
+                    // Final fallback to default
+                    const videoId = thumbnailUrl.match(/\/vi\/([^\/]+)\//)?.[1];
+                    if (videoId) {
+                      target.src = `https://img.youtube.com/vi/${videoId}/default.jpg`;
+                    }
+                  }
+                }}
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-red-500/20 to-black/40 flex items-center justify-center">

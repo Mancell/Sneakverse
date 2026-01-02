@@ -60,26 +60,18 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
     
     switch (selectedPeriod) {
       case '3months': {
-        cutoffDate = new Date(now);
-        cutoffDate.setMonth(now.getMonth() - 3);
-        // Handle year rollover
-        if (cutoffDate.getMonth() > now.getMonth()) {
-          cutoffDate.setFullYear(now.getFullYear() - 1);
-        }
+        // Safe date calculation: create new date and subtract months properly
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
         break;
       }
       case '6months': {
-        cutoffDate = new Date(now);
-        cutoffDate.setMonth(now.getMonth() - 6);
-        // Handle year rollover
-        if (cutoffDate.getMonth() > now.getMonth()) {
-          cutoffDate.setFullYear(now.getFullYear() - 1);
-        }
+        // Safe date calculation: create new date and subtract months properly
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
         break;
       }
       case '1year': {
-        cutoffDate = new Date(now);
-        cutoffDate.setFullYear(now.getFullYear() - 1);
+        // Safe date calculation: create new date and subtract year properly
+        cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
         break;
       }
       default:
@@ -87,7 +79,7 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
     }
 
     // Ensure cutoffDate is valid
-    if (isNaN(cutoffDate.getTime())) {
+    if (isNaN(cutoffDate.getTime()) || cutoffDate.getTime() < 0) {
       cutoffDate = new Date(0);
     }
 
@@ -266,7 +258,7 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
             </button>
           </div>
 
-          <div className="h-[220px] w-full mb-5 bg-gray-50/50 rounded-lg p-3 border border-gray-100">
+          <div className="w-full min-h-[320px] h-[320px] mb-5 bg-gray-50/50 rounded-lg p-3 border border-gray-100">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart 
                 data={chartData} 
@@ -326,8 +318,7 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
                   dot={false}
                   activeDot={{ r: 5, fill: '#146eb4', strokeWidth: 2, stroke: '#fff' }}
                   name="Sale Price"
-                  animationDuration={300}
-                  isAnimationActive={true}
+                  isAnimationActive={chartData.length > 0 && chartData.length < 100}
                 />
                 <Line 
                   type="monotone" 
@@ -337,8 +328,7 @@ export default function PriceHistoryChart({ data, productName }: PriceHistoryCha
                   dot={false}
                   activeDot={{ r: 5, fill: '#FF9900', strokeWidth: 2, stroke: '#fff' }}
                   name="Regular Price"
-                  animationDuration={300}
-                  isAnimationActive={true}
+                  isAnimationActive={chartData.length > 0 && chartData.length < 100}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -7,7 +7,6 @@ import BlogCard from "@/components/BlogCard";
 import { AnimatedText } from "@/components/ui/animated-underline-text-one";
 import {
   getBlogPostBySlug,
-  getAllBlogPosts,
   getBlogPostsByCategory,
 } from "@/lib/data/blog";
 import { notFound } from "next/navigation";
@@ -111,13 +110,10 @@ export default async function BlogDetailPage({
     notFound();
   }
 
-  // Get related posts (same category, excluding current post)
+  // Get related posts (same category, excluding current post) - optimize: only get what we need
   const relatedPosts = getBlogPostsByCategory(post.category)
     .filter((p) => p.id !== post.id)
     .slice(0, 3);
-
-  // Get all categories for navigation
-  const allPosts = getAllBlogPosts();
 
   // Prepare structured data for SEO
   const articleStructuredData = {
@@ -208,14 +204,14 @@ export default async function BlogDetailPage({
       <nav className="mb-6 text-caption text-dark-700" aria-label="Breadcrumb">
         <ol className="flex items-center space-x-2" itemScope itemType="https://schema.org/BreadcrumbList">
           <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
-            <Link href="/" className="hover:underline" itemProp="item">
+            <Link href="/" prefetch={true} className="hover:underline" itemProp="item">
               <span itemProp="name">Home</span>
             </Link>
             <meta itemProp="position" content="1" />
           </li>
           <span className="text-dark-500">/</span>
           <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
-            <Link href="/blog" className="hover:underline" itemProp="item">
+            <Link href="/blog" prefetch={true} className="hover:underline" itemProp="item">
               <span itemProp="name">Blog</span>
             </Link>
             <meta itemProp="position" content="2" />
@@ -231,6 +227,7 @@ export default async function BlogDetailPage({
       {/* Back Button */}
       <Link
         href="/blog"
+        prefetch={true}
         className="inline-flex items-center gap-2 mb-6 text-body text-dark-700 hover:text-dark-900 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -366,6 +363,7 @@ export default async function BlogDetailPage({
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/blog"
+                prefetch={true}
                 className="text-body font-medium text-dark-900 hover:text-dark-700 underline"
               >
                 All Blog Posts
@@ -373,6 +371,7 @@ export default async function BlogDetailPage({
               <span className="text-dark-400">•</span>
               <Link
                 href={`/blog?category=${encodeURIComponent(post.category)}`}
+                prefetch={true}
                 className="text-body font-medium text-dark-900 hover:text-dark-700 underline"
               >
                 More {post.category} Posts
@@ -380,6 +379,7 @@ export default async function BlogDetailPage({
               <span className="text-dark-400">•</span>
               <Link
                 href="/products"
+                prefetch={true}
                 className="text-body font-medium text-dark-900 hover:text-dark-700 underline"
               >
                 Browse Products

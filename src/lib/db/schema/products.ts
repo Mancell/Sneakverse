@@ -21,6 +21,9 @@ export const products = pgTable('products', {
   amazonUrl: text('amazon_url'),
   manualRating: numeric('manual_rating', { precision: 3, scale: 2 }),
   manualReviewCount: integer('manual_review_count'),
+  metaTitle: text('meta_title'),
+  metaDescription: text('meta_description'),
+  metaKeywords: text('meta_keywords'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -59,6 +62,9 @@ export const insertProductSchema = z.object({
   amazonUrl: z.string().url().optional().nullable(),
   manualRating: z.string().optional().nullable(),
   manualReviewCount: z.number().int().min(0).optional().nullable(),
+  metaTitle: z.string().optional().nullable(),
+  metaDescription: z.string().optional().nullable(),
+  metaKeywords: z.string().optional().nullable(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });

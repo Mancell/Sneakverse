@@ -1,5 +1,7 @@
 "use server";
 
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -44,23 +46,55 @@ export type GetAllProductsResult = {
   totalCount: number;
 };
 
-export async function getAllProducts(filters: NormalizedProductFilters): Promise<GetAllProductsResult> {
+// Cache filter ID lookups separately for better performance
+const getFilterIds = cache(
+  unstable_cache(
+    async (type: 'gender' | 'brand' | 'category' | 'size' | 'color', slugs: string[]) => {
+      if (slugs.length === 0) return [];
+      
+      const { genders, brands, categories, sizes, colors } = await import("@/lib/db/schema");
+      
+      switch (type) {
+        case 'gender':
+          const genderResults = await db.select({ id: genders.id }).from(genders).where(inArray(genders.slug, slugs));
+          return genderResults.map(g => g.id);
+        case 'brand':
+          const brandResults = await db.select({ id: brands.id }).from(brands).where(inArray(brands.slug, slugs));
+          return brandResults.map(b => b.id);
+        case 'category':
+          const categoryResults = await db.select({ id: categories.id }).from(categories).where(inArray(categories.slug, slugs));
+          return categoryResults.map(c => c.id);
+        case 'size':
+          const sizeResults = await db.select({ id: sizes.id }).from(sizes).where(inArray(sizes.slug, slugs));
+          return sizeResults.map(s => s.id);
+        case 'color':
+          const colorResults = await db.select({ id: colors.id }).from(colors).where(inArray(colors.slug, slugs));
+          return colorResults.map(c => c.id);
+        default:
+          return [];
+      }
+    },
+    ['filter-ids'],
+    { revalidate: 600, tags: ['filters'] } // 10 minutes cache
+  )
+);
+
+const getAllProductsImpl = async (filters: NormalizedProductFilters): Promise<GetAllProductsResult> => {
   try {
     console.log("[getAllProducts] Starting with filters:", JSON.stringify(filters));
     const conds: SQL[] = [eq(products.isPublished, true)];
 
     if (filters.search) {
-      // Normalize search query: remove spaces, convert to lowercase for better matching
+      // Optimized search: prioritize name and brand, remove description search for performance
       const normalizedSearch = filters.search.trim().toLowerCase().replace(/\s+/g, '');
       const searchPattern = `%${filters.search.trim()}%`;
       
-      // Search in multiple fields with case-insensitive matching
-      // Also search in normalized form (without spaces) for better results
+      // Optimized search - removed description search for better performance
+      // Search in product name and brand name first (fastest)
+      // Then normalized search (without spaces) for "newbalance" to match "New Balance"
       conds.push(
         or(
           ilike(products.name, searchPattern),
-          ilike(products.description, searchPattern),
-          // Search in brand name via join
           ilike(brands.name, searchPattern),
           // Normalized search (without spaces) - for "newbalance" to match "New Balance"
           sql`LOWER(REPLACE(${products.name}, ' ', '')) LIKE ${`%${normalizedSearch}%`}`,
@@ -69,43 +103,43 @@ export async function getAllProducts(filters: NormalizedProductFilters): Promise
       );
     }
 
-    // Pre-fetch IDs for filters to use in queries (more reliable than subqueries)
+    // Pre-fetch IDs for filters to use in queries - batch all pre-fetches in parallel
+    const preFetchPromises: Array<Promise<{ type: string; ids: string[] }>> = [];
     let genderIds: string[] = [];
     let brandIds: string[] = [];
     let categoryIds: string[] = [];
+    let sizeIds: string[] = [];
+    let colorIds: string[] = [];
     
+    // Batch all pre-fetch queries in parallel
     if (filters.genderSlugs.length) {
-      const genderResults = await db
-        .select({ id: genders.id })
-        .from(genders)
-        .where(inArray(genders.slug, filters.genderSlugs));
-      genderIds = genderResults.map(g => g.id);
-      console.log("[getAllProducts] Gender slugs:", filters.genderSlugs, "-> IDs:", genderIds);
-      if (genderIds.length > 0) {
-        conds.push(inArray(products.genderId, genderIds));
-      }
+      preFetchPromises.push(
+        db
+          .select({ id: genders.id })
+          .from(genders)
+          .where(inArray(genders.slug, filters.genderSlugs))
+          .then(results => ({ type: 'gender', ids: results.map(g => g.id) }))
+      );
     }
 
     if (filters.brandSlugs.length) {
-      const brandResults = await db
-        .select({ id: brands.id })
-        .from(brands)
-        .where(inArray(brands.slug, filters.brandSlugs));
-      brandIds = brandResults.map(b => b.id);
-      if (brandIds.length > 0) {
-        conds.push(inArray(products.brandId, brandIds));
-      }
+      preFetchPromises.push(
+        db
+          .select({ id: brands.id })
+          .from(brands)
+          .where(inArray(brands.slug, filters.brandSlugs))
+          .then(results => ({ type: 'brand', ids: results.map(b => b.id) }))
+      );
     }
 
     if (filters.categorySlugs.length) {
-      const categoryResults = await db
-        .select({ id: categories.id })
-        .from(categories)
-        .where(inArray(categories.slug, filters.categorySlugs));
-      categoryIds = categoryResults.map(c => c.id);
-      if (categoryIds.length > 0) {
-        conds.push(inArray(products.categoryId, categoryIds));
-      }
+      preFetchPromises.push(
+        db
+          .select({ id: categories.id })
+          .from(categories)
+          .where(inArray(categories.slug, filters.categorySlugs))
+          .then(results => ({ type: 'category', ids: results.map(c => c.id) }))
+      );
     }
 
     const hasSize = filters.sizeSlugs.length > 0;
@@ -113,23 +147,67 @@ export async function getAllProducts(filters: NormalizedProductFilters): Promise
     const hasPrice = !!(filters.priceMin !== undefined || filters.priceMax !== undefined || filters.priceRanges.length);
 
     // Pre-fetch IDs for variant filters to use in subqueries
-    let sizeIds: string[] = [];
-    let colorIds: string[] = [];
-    
     if (hasSize) {
-      const sizeResults = await db
-        .select({ id: sizes.id })
-        .from(sizes)
-        .where(inArray(sizes.slug, filters.sizeSlugs));
-      sizeIds = sizeResults.map(s => s.id);
+      preFetchPromises.push(
+        db
+          .select({ id: sizes.id })
+          .from(sizes)
+          .where(inArray(sizes.slug, filters.sizeSlugs))
+          .then(results => ({ type: 'size', ids: results.map(s => s.id) }))
+      );
     }
     
     if (hasColor) {
-      const colorResults = await db
-        .select({ id: colors.id })
-        .from(colors)
-        .where(inArray(colors.slug, filters.colorSlugs));
-      colorIds = colorResults.map(c => c.id);
+      preFetchPromises.push(
+        db
+          .select({ id: colors.id })
+          .from(colors)
+          .where(inArray(colors.slug, filters.colorSlugs))
+          .then(results => ({ type: 'color', ids: results.map(c => c.id) }))
+      );
+    }
+
+    // Wait for all pre-fetch queries to complete and assign results
+    const preFetchResults = await Promise.all(preFetchPromises);
+    for (const result of preFetchResults) {
+      switch (result.type) {
+        case 'gender':
+          genderIds = result.ids;
+          console.log("[getAllProducts] Gender slugs:", filters.genderSlugs, "-> IDs:", genderIds);
+          if (genderIds.length > 0) {
+            conds.push(inArray(products.genderId, genderIds));
+          }
+          break;
+        case 'brand':
+          brandIds = result.ids;
+          if (brandIds.length > 0) {
+            conds.push(inArray(products.brandId, brandIds));
+          }
+          break;
+        case 'category':
+          categoryIds = result.ids;
+          if (categoryIds.length > 0) {
+            conds.push(inArray(products.categoryId, categoryIds));
+          }
+          break;
+        case 'size':
+          sizeIds = result.ids;
+          break;
+        case 'color':
+          colorIds = result.ids;
+          break;
+      }
+    }
+    
+    // Add conditions after IDs are fetched
+    if (genderIds.length > 0) {
+      conds.push(inArray(products.genderId, genderIds));
+    }
+    if (brandIds.length > 0) {
+      conds.push(inArray(products.brandId, brandIds));
+    }
+    if (categoryIds.length > 0) {
+      conds.push(inArray(products.categoryId, categoryIds));
     }
 
     // Build variant filter SQL string for subqueries
@@ -324,7 +402,19 @@ export async function getAllProducts(filters: NormalizedProductFilters): Promise
     // Return empty result instead of throwing to prevent page crash
     return { products: [], totalCount: 0 };
   }
-}
+};
+
+// Wrap with React cache for request deduplication and Next.js cache for longer-term caching
+export const getAllProducts = cache(
+  unstable_cache(
+    getAllProductsImpl,
+    ['products'],
+    { 
+      revalidate: 60, // 60 seconds
+      tags: ['products'] 
+    }
+  )
+);
 
 export type FullProduct = {
   product: SelectProduct & {
@@ -341,7 +431,7 @@ export type FullProduct = {
   images: SelectProductImage[];
 };
 
-export async function getProduct(productId: string): Promise<FullProduct | null> {
+const getProductImpl = async (productId: string): Promise<FullProduct | null> => {
   try {
     // Validate productId is a valid UUID
     if (!productId || typeof productId !== 'string') {
@@ -526,7 +616,20 @@ export async function getProduct(productId: string): Promise<FullProduct | null>
     // Return null instead of throwing to prevent page crash
     return null;
   }
-}
+};
+
+// Wrap with React cache for request deduplication and Next.js cache for longer-term caching
+export const getProduct = cache(
+  unstable_cache(
+    getProductImpl,
+    ['product'],
+    { 
+      revalidate: 300, // 5 minutes
+      tags: ['products', 'product'] 
+    }
+  )
+);
+
 export type Review = {
   id: string;
   author: string;
@@ -662,7 +765,7 @@ export async function getFeaturedReviews(productId: string): Promise<FeaturedRev
       .from(featuredReviews)
       .where(eq(featuredReviews.productId, productId))
       .orderBy(asc(featuredReviews.order))
-      .limit(3);
+      .limit(5);
 
     return rows.map((r) => ({
       id: r.id,
@@ -684,7 +787,8 @@ export type PriceHistoryPoint = {
   salePrice?: number | null;
 };
 
-export async function getProductPriceHistory(productId: string, months: number = 12): Promise<PriceHistoryPoint[]> {
+// Cache function for price history
+const getProductPriceHistoryImpl = async (productId: string, months: number = 12): Promise<PriceHistoryPoint[]> => {
   try {
     console.log("[getProductPriceHistory] Fetching for productId:", productId);
     console.log("[getProductPriceHistory] Months:", months);
@@ -742,7 +846,18 @@ export async function getProductPriceHistory(productId: string, months: number =
     console.error("[getProductPriceHistory] Error:", error);
     return [];
   }
-}
+};
+
+export const getProductPriceHistory = cache(
+  unstable_cache(
+    getProductPriceHistoryImpl,
+    ['price-history'],
+    { 
+      revalidate: 300, // 5 minutes
+      tags: ['products', 'price-history'] 
+    }
+  )
+);
 
 export type TikTokVideoCard = {
   id: string;
@@ -753,7 +868,7 @@ export type TikTokVideoCard = {
   duration?: number | null;
 };
 
-export async function getTikTokVideos(productId: string): Promise<TikTokVideoCard[]> {
+export const getTikTokVideos = cache(async (productId: string): Promise<TikTokVideoCard[]> => {
   try {
     const { tiktokVideos } = await import('@/lib/db/schema/social-media');
     const rows = await db
@@ -781,7 +896,7 @@ export async function getTikTokVideos(productId: string): Promise<TikTokVideoCar
     console.error("[getTikTokVideos] Error:", error);
     return [];
   }
-}
+});
 
 export type YouTubeVideoCard = {
   id: string;
@@ -791,7 +906,7 @@ export type YouTubeVideoCard = {
   author?: string;
 };
 
-export async function getYouTubeVideos(productId: string): Promise<YouTubeVideoCard[]> {
+export const getYouTubeVideos = cache(async (productId: string): Promise<YouTubeVideoCard[]> => {
   try {
     const { youtubeVideos } = await import('@/lib/db/schema/social-media');
     const rows = await db
@@ -818,9 +933,9 @@ export async function getYouTubeVideos(productId: string): Promise<YouTubeVideoC
     console.error("[getYouTubeVideos] Error:", error);
     return [];
   }
-}
+});
 
-export async function getAllBrands(): Promise<Array<{ id: string; name: string; slug: string }>> {
+const getAllBrandsImpl = async (): Promise<Array<{ id: string; name: string; slug: string }>> => {
   try {
     const brandRows = await db
       .select({
@@ -837,9 +952,20 @@ export async function getAllBrands(): Promise<Array<{ id: string; name: string; 
     console.error("[getAllBrands] Error:", error);
     return [];
   }
-}
+};
 
-export async function getAllCategories(genderSlugs?: string[]): Promise<Array<{ id: string; name: string; slug: string }>> {
+export const getAllBrands = cache(
+  unstable_cache(
+    getAllBrandsImpl,
+    ['brands'],
+    { 
+      revalidate: 600, // 10 minutes
+      tags: ['brands'] 
+    }
+  )
+);
+
+const getAllCategoriesImpl = async (genderSlugs?: string[]): Promise<Array<{ id: string; name: string; slug: string }>> => {
   try {
     // Priority categories that should appear at the top
     const priorityCategories = ['sneakers', 'boots', 'sports-and-outdoor-shoes'];
@@ -922,7 +1048,18 @@ export async function getAllCategories(genderSlugs?: string[]): Promise<Array<{ 
     console.error("[getAllCategories] Error:", error);
     return [];
   }
-}
+};
+
+export const getAllCategories = cache(
+  unstable_cache(
+    getAllCategoriesImpl,
+    ['categories'],
+    { 
+      revalidate: 600, // 10 minutes
+      tags: ['categories'] 
+    }
+  )
+);
 
 export async function getRecommendedProducts(productId: string): Promise<RecommendedProduct[]> {
   const base = await db

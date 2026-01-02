@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { memo } from "react";
 
 export type BadgeTone = "red" | "green" | "orange";
 
@@ -25,7 +26,7 @@ const toneToBg: Record<BadgeTone, string> = {
   orange: "text-[--color-orange]",
 };
 
-export default function Card({
+function Card({
   title,
   description,
   subtitle,
@@ -60,6 +61,7 @@ export default function Card({
           fill
           sizes={isSmall ? "(min-width: 1280px) 200px, (min-width: 1024px) 180px, (min-width: 640px) 30vw, 45vw" : "(min-width: 1280px) 360px, (min-width: 1024px) 300px, (min-width: 640px) 45vw, 90vw"}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
+          loading="lazy"
         />
       </div>
       <div className={`${paddingClass} flex flex-col h-full`}>
@@ -103,6 +105,7 @@ export default function Card({
   return href ? (
     <Link
       href={href}
+      prefetch={true}
       aria-label={title}
       className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[--color-dark-500]"
     >
@@ -112,3 +115,5 @@ export default function Card({
     content
   );
 }
+
+export default memo(Card);

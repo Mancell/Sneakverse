@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { ProductSearchBar } from "./ProductSearchBar";
+import { MenuToggleIcon } from "@/components/ui/menu-toggle-icon";
 
 const NAV_LINKS = [
   { label: "Men", href: "/products?gender=men" },
@@ -25,7 +26,7 @@ export default function Navbar() {
       >
         <div className="flex items-center gap-6">
           <Link href="/" aria-label="Nike Home" className="flex items-center">
-            <Image src="/logo.svg" alt="Nike" width={40} height={40} priority className="invert" />
+            <Image src="/logo.svg" alt="Nike" width={56} height={56} priority className="invert" />
           </Link>
           <div className="hidden md:block w-80">
             <ProductSearchBar />
@@ -47,35 +48,48 @@ export default function Navbar() {
 
         <button
           type="button"
-          className="inline-flex items-center justify-center rounded-md p-3 md:hidden"
+          className="inline-flex items-center justify-center rounded-md p-2 md:hidden text-dark-900 hover:text-dark-700 transition-colors"
           aria-controls="mobile-menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
           <span className="sr-only">Toggle navigation</span>
-          <span className="mb-1.5 block h-1 w-8 bg-dark-900"></span>
-          <span className="mb-1.5 block h-1 w-8 bg-dark-900"></span>
-          <span className="block h-1 w-8 bg-dark-900"></span>
+          <MenuToggleIcon open={open} className="size-14" duration={500} stroke="currentColor" />
         </button>
       </nav>
 
       <div
         id="mobile-menu"
-        className={`border-t border-light-300 md:hidden ${open ? "block" : "hidden"}`}
+        className={`border-t border-light-300 md:hidden overflow-hidden transition-all duration-500 ease-in-out ${
+          open ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0"
+        }`}
       >
-        <ul className="space-y-2 px-4 py-3">
-          {NAV_LINKS.map((l) => (
-            <li key={l.href}>
+        <ul className="space-y-1 px-4 py-4">
+          {NAV_LINKS.map((l, index) => (
+            <li 
+              key={l.href}
+              className="opacity-0 animate-fade-in"
+              style={{
+                animationDelay: `${index * 50}ms`,
+                animationFillMode: open ? 'forwards' : 'backwards',
+              }}
+            >
               <Link
                 href={l.href}
-                className="block py-2 text-body text-dark-900 hover:text-dark-700"
+                className="block py-3 px-2 text-body text-dark-900 hover:text-dark-700 hover:bg-dark-900/5 rounded-lg transition-colors font-medium"
                 onClick={() => setOpen(false)}
               >
                 {l.label}
               </Link>
             </li>
           ))}
-          <li className="pt-2">
+          <li 
+            className="pt-2 opacity-0 animate-fade-in"
+            style={{
+              animationDelay: `${NAV_LINKS.length * 50}ms`,
+              animationFillMode: open ? 'forwards' : 'backwards',
+            }}
+          >
             <div className="w-full">
               <ProductSearchBar />
             </div>
